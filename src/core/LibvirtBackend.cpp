@@ -527,6 +527,44 @@ QList<NetworkInfo> LibvirtBackend::listNetworks() {
     return out;
 }
 
+ConsoleInfo LibvirtBackend::consoleInfo(const QString &uuid) {
+    virDomainPtr d = lookup(uuid);
+    ConsoleInfo c;
+    int state = 0, reason = 0;
+    if (virDomainGetState(d, &state, &reason, 0) == 0)
+        c.running = state == VIR_DOMAIN_RUNNING;
+
+    if (char *xml = virDomainGetXMLDesc(d, 0)) {
+        const QString s = QString::fromUtf8(xml);
+        free(xml);
+        // Parse the <graphics .../> element attributes (vnc/spice, port, listen).
+        const int gi = s.indexOf(QLatin1String("<graphics"));
+        if (gi >= 0) {
+            const int ge = s.indexOf('>', gi);
+            const QString tag = s.mid(gi, ge - gi);
+            const auto attr = [&tag](const QString &name) -> QString {
+                const QString key = name + QStringLiteral("='");
+                int a = tag.indexOf(key);
+                if (a < 0) return {};
+                a += key.size();
+                const int b = tag.indexOf('\'', a);
+                return b > a ? tag.mid(a, b - a) : QString();
+            };
+            c.graphicsType = attr(QStringLiteral("type"));
+            const QString port = attr(QStringLiteral("port"));
+            bool ok = false;
+            const int p = port.toInt(&ok);
+            if (ok && p > 0) c.port = p;
+            c.host = attr(QStringLiteral("listen"));
+            if (c.host.isEmpty() || c.host == QLatin1String("0.0.0.0"))
+                c.host = QStringLiteral("127.0.0.1");
+        }
+        c.hasSerial = s.contains(QLatin1String("<serial")) || s.contains(QLatin1String("<console"));
+    }
+    virDomainFree(d);
+    return c;
+}
+
 VmInfo LibvirtBackend::importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) {
     const QString xml = buildDomainXml(req, diskPath);
     virDomainPtr dom = virDomainDefineXML(m_conn, xml.toUtf8().constData());

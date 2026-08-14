@@ -207,7 +207,8 @@ ApplicationWindow {
                     visible: App.usingMockBackend
                     Text {
                         anchors.centerIn: parent
-                        text: qsTr("● Demo mode — check tools")
+                        text: App.demoMode ? qsTr("● Demo mode (sample data)")
+                                           : qsTr("● libvirt unavailable — check tools")
                         color: Theme.accent; font.pixelSize: Theme.fontXs
                     }
                     TapHandler { onTapped: depDialog.open() }

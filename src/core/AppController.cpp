@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QUrl>
+#include <QDesktopServices>
 #include <memory>
 
 namespace vmm {
@@ -276,6 +277,40 @@ void AppController::loadSnapshots(const QString &connId, const QString &uuid) {
             for (const auto &s : *result) out.push_back(snapshotToMap(s));
             emit snapshotsLoaded(uuid, out);
         });
+}
+
+void AppController::loadConsole(const QString &connId, const QString &uuid) {
+    auto info = std::make_shared<ConsoleInfo>();
+    m_cm->runAsync(connId,
+        [uuid, info](IHypervisorBackend &b){ *info = b.consoleInfo(uuid); },
+        [this, uuid, info] {
+            emit consoleLoaded(uuid, QVariantMap{
+                {"graphicsType", info->graphicsType}, {"host", info->host},
+                {"port", info->port}, {"hasSerial", info->hasSerial},
+                {"running", info->running}});
+        },
+        [this](const QString &err){ emit notify(Warning, tr("Console info failed"), err); });
+}
+
+void AppController::openConsoleExternally(const QString &connId, const QString &uuid) {
+    auto info = std::make_shared<ConsoleInfo>();
+    m_cm->runAsync(connId,
+        [uuid, info](IHypervisorBackend &b){ *info = b.consoleInfo(uuid); },
+        [this, info] {
+            if (!info->running) { emit notify(Warning, tr("Console"), tr("The VM is not running.")); return; }
+            if (info->port <= 0 || info->graphicsType.isEmpty()) {
+                emit notify(Warning, tr("Console"), tr("No graphical console is configured for this VM."));
+                return;
+            }
+            const QString scheme = info->graphicsType == QLatin1String("spice") ? QStringLiteral("spice")
+                                                                                : QStringLiteral("vnc");
+            const QUrl url(QStringLiteral("%1://%2:%3").arg(scheme, info->host).arg(info->port));
+            if (!QDesktopServices::openUrl(url))
+                emit notify(Warning, tr("Console"), tr("Copy this address into a viewer: %1").arg(url.toString()));
+            else
+                emit notify(Info, tr("Opening console"), url.toString());
+        },
+        [this](const QString &err){ emit notify(Error, tr("Console failed"), err); });
 }
 
 void AppController::importImage(const QString &connId, const QString &sourcePath,

@@ -286,6 +286,19 @@ void MockBackend::deleteVolume(const QString &poolName, const QString &volumeNam
         [&](const VolumeInfo &v){ return v.name == volumeName; }), vols.end());
 }
 
+ConsoleInfo MockBackend::consoleInfo(const QString &uuid) {
+    QMutexLocker lock(&m_mutex);
+    const VmInfo v = require(uuid);
+    ConsoleInfo c;
+    c.running = v.state == VmState::Running;
+    c.graphicsType = "vnc";
+    c.host = "127.0.0.1";
+    // Stable pseudo-port derived from the uuid so the demo looks believable.
+    c.port = c.running ? 5900 + int(qHash(uuid) % 64) : -1;
+    c.hasSerial = true;
+    return c;
+}
+
 VmInfo MockBackend::importPreparedDisk(const QString &, const VmCreateRequest &req) {
     return define(req);
 }

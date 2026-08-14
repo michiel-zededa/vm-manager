@@ -61,6 +61,8 @@ public:
                             const QString &format, quint64 capacityBytes) override;
     void deleteVolume(const QString &poolName, const QString &volumeName) override;
 
+    ConsoleInfo consoleInfo(const QString &uuid) override;
+
     VmInfo importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) override;
 
 private:

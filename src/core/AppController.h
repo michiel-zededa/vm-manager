@@ -81,6 +81,11 @@ public:
     // Async fetch; result arrives via snapshotsLoaded(uuid, list-of-maps).
     Q_INVOKABLE void loadSnapshots(const QString &connId, const QString &uuid);
 
+    // ---- Console --------------------------------------------------------
+    Q_INVOKABLE void loadConsole(const QString &connId, const QString &uuid); // -> consoleLoaded
+    // Open the graphical console in the OS's viewer (Screen Sharing / vinagre / …).
+    Q_INVOKABLE void openConsoleExternally(const QString &connId, const QString &uuid);
+
     // ---- Import ---------------------------------------------------------
     // Converts (if needed) then defines a VM. request as in createVm.
     Q_INVOKABLE void importImage(const QString &connId, const QString &sourcePath,
@@ -114,6 +119,7 @@ signals:
     void notify(int level, const QString &title, const QString &message); // level: 0 info,1 success,2 warning,3 error
     void vmActionCompleted(const QString &uuid, const QString &action);
     void snapshotsLoaded(const QString &uuid, const QVariantList &snapshots);
+    void consoleLoaded(const QString &uuid, const QVariantMap &console);
     void storageLoaded(const QString &connId, const QVariantList &pools);
     void volumesLoaded(const QString &connId, const QString &poolName, const QVariantList &volumes);
     void networksLoaded(const QString &connId, const QVariantList &networks);

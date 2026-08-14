@@ -96,6 +96,15 @@ struct NetworkInfo {
     QString forwardDev;
 };
 
+// How to reach a VM's console (graphical + serial), parsed from the domain.
+struct ConsoleInfo {
+    QString graphicsType;         // "vnc", "spice", or "" (none)
+    QString host;                 // listen address, best-effort ("127.0.0.1")
+    int port = -1;                // graphics port, -1 if none/autoport unresolved
+    bool hasSerial = false;       // a <serial>/<console> device is present
+    bool running = false;         // console only reachable while running
+};
+
 // A request to define a new VM (from the create wizard).
 struct VmCreateRequest {
     QString name;

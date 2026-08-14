@@ -76,6 +76,9 @@ public:
                                     const QString &format, quint64 capacityBytes) = 0;
     virtual void deleteVolume(const QString &poolName, const QString &volumeName) = 0;
 
+    // Console reachability (graphical endpoint + serial availability).
+    virtual ConsoleInfo consoleInfo(const QString &uuid) = 0;
+
     // Import a prepared (already-converted) qcow2/raw volume + metadata as a VM.
     // Format conversion itself is handled by ImageImporter before this call.
     virtual VmInfo importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) = 0;
