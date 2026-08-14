@@ -44,7 +44,6 @@ jobs:
         with:
           version: '6.7.2'
           cache: true
-          modules: 'qtdeclarative'
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVMM_WITH_LIBVIRT=OFF -DVMM_BUILD_TESTS=OFF
