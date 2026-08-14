@@ -5,6 +5,8 @@
 #include <QObject>
 #include <QHash>
 #include <QThreadPool>
+#include <QMutex>
+#include <QStringList>
 #include <memory>
 #include <functional>
 
