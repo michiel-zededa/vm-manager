@@ -47,6 +47,11 @@ int ConnectionModel::indexOfId(const QString &id) const {
     return -1;
 }
 
+QString ConnectionModel::displayNameFor(const QString &id) const {
+    const int i = indexOfId(id);
+    return i >= 0 ? m_hosts.at(i).displayName : QString();
+}
+
 void ConnectionModel::upsert(const HostInfo &host) {
     const int i = indexOfId(host.id);
     if (i >= 0) {

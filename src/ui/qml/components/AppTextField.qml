@@ -10,9 +10,11 @@ TextField {
     selectionColor: Theme.selection
     selectedTextColor: Theme.accentText
     font.pixelSize: Theme.fontMd
-    padding: Theme.space3
+    verticalAlignment: TextInput.AlignVCenter
     leftPadding: Theme.space3
     rightPadding: Theme.space3
+    topPadding: 0
+    bottomPadding: 0
     implicitHeight: 38
     hoverEnabled: true
 
