@@ -84,7 +84,10 @@ private:
     virDomainPtr lookup(const QString &uuid);        // caller frees
     VmInfo toVmInfo(virDomainPtr dom);
     void sampleRates(virDomainPtr dom, VmInfo &v);   // CPU%/disk/net deltas
-    QString buildDomainXml(const VmCreateRequest &req, const QString &diskPath);
+    QString buildDomainXml(const VmCreateRequest &req, const QString &diskPath,
+                           const QString &seedPath = {});
+    // Build a NoCloud cidata seed ISO for cloud-init (local hosts only).
+    QString buildCloudInitSeed(const VmCreateRequest &req);
 
     // Previous per-domain counters for computing live rates between polls.
     struct DomSample {

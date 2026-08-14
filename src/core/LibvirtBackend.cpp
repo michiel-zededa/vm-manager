@@ -6,6 +6,11 @@
 #include <QDateTime>
 #include <QByteArray>
 #include <QRegularExpression>
+#include <QProcess>
+#include <QTemporaryDir>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
 
 namespace vmm {
 
@@ -373,7 +378,8 @@ void LibvirtBackend::setAutostart(const QString &uuid, bool on) {
     if (rc < 0) throwLast(QStringLiteral("set autostart"));
 }
 
-QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString &diskPath) {
+QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString &diskPath,
+                                       const QString &seedPath) {
     // OS-aware domain. The wizard's OS selection drives sensible hardware:
     //  - Windows: UEFI firmware; Windows 11 also gets a TPM 2.0 + Secure Boot.
     //    SATA disk + e1000e NIC so the installer boots without extra drivers.
@@ -399,6 +405,15 @@ QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString
             "      <target dev='sdc' bus='sata'/>\n"
             "      <readonly/>\n"
             "    </disk>\n").arg(req.installMediaPath.toHtmlEscaped());
+    }
+    if (!seedPath.isEmpty()) {
+        media += QStringLiteral(
+            "    <disk type='file' device='cdrom'>\n"
+            "      <driver name='qemu' type='raw'/>\n"
+            "      <source file='%1'/>\n"
+            "      <target dev='sdd' bus='sata'/>\n"
+            "      <readonly/>\n"
+            "    </disk>\n").arg(seedPath.toHtmlEscaped());
     }
 
     const QString firmwareAttr = uefi ? QStringLiteral(" firmware='efi'") : QString();
@@ -456,13 +471,64 @@ QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString
         .arg(diskDev, diskBus, media, req.networkName.toHtmlEscaped(), nicModel, tpm, video);
 }
 
+QString LibvirtBackend::buildCloudInitSeed(const VmCreateRequest &req) {
+    // The seed file must be on the hypervisor host; only wire it for local URIs.
+    if (!m_uri.contains(QLatin1String("///")))
+        return {};
+
+    const QString hostname = req.ciHostname.isEmpty() ? req.name : req.ciHostname;
+    QString userData = QStringLiteral("#cloud-config\nhostname: %1\nmanage_etc_hosts: true\n").arg(hostname);
+    if (!req.ciUser.isEmpty()) {
+        userData += QStringLiteral(
+            "users:\n  - name: %1\n    sudo: ALL=(ALL) NOPASSWD:ALL\n"
+            "    shell: /bin/bash\n    lock_passwd: false\n").arg(req.ciUser);
+        if (!req.ciSshKey.trimmed().isEmpty())
+            userData += QStringLiteral("    ssh_authorized_keys:\n      - %1\n").arg(req.ciSshKey.trimmed());
+    }
+    if (!req.ciPassword.isEmpty() && !req.ciUser.isEmpty())
+        userData += QStringLiteral("chpasswd:\n  expire: false\n  list: |\n    %1:%2\nssh_pwauth: true\n")
+                        .arg(req.ciUser, req.ciPassword);
+    const QString metaData = QStringLiteral("instance-id: %1\nlocal-hostname: %2\n").arg(req.name, hostname);
+
+    QTemporaryDir tmp;
+    if (!tmp.isValid()) return {};
+    { QFile f(tmp.filePath("user-data")); if (f.open(QIODevice::WriteOnly)) f.write(userData.toUtf8()); }
+    { QFile f(tmp.filePath("meta-data")); if (f.open(QIODevice::WriteOnly)) f.write(metaData.toUtf8()); }
+
+    const QString outDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/seeds";
+    QDir().mkpath(outDir);
+    const QString seedPath = QDir(outDir).filePath(req.name + "-seed.iso");
+    QFile::remove(seedPath);
+
+    struct Cmd { QString prog; QStringList args; };
+    QList<Cmd> cmds;
+    if (const QString c = QStandardPaths::findExecutable("cloud-localds"); !c.isEmpty())
+        cmds.push_back({c, {seedPath, tmp.filePath("user-data"), tmp.filePath("meta-data")}});
+    for (const char *t : {"genisoimage", "mkisofs", "xorrisofs"})
+        if (const QString e = QStandardPaths::findExecutable(t); !e.isEmpty())
+            cmds.push_back({e, {"-output", seedPath, "-volid", "cidata", "-joliet", "-rock",
+                                tmp.filePath("user-data"), tmp.filePath("meta-data")}});
+    if (const QString h = QStandardPaths::findExecutable("hdiutil"); !h.isEmpty())
+        cmds.push_back({h, {"makehybrid", "-iso", "-joliet", "-default-volume-name", "cidata",
+                            "-o", seedPath, tmp.path()}});
+
+    for (const Cmd &c : cmds) {
+        QProcess p;
+        p.start(c.prog, c.args);
+        p.waitForFinished(30000);
+        if (p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0 && QFileInfo::exists(seedPath))
+            return seedPath;
+    }
+    return {};   // no ISO tool available — VM still defines, just without the seed
+}
+
 VmInfo LibvirtBackend::define(const VmCreateRequest &req) {
-    // NOTE(phase-1): this defines the domain but does not yet allocate the
-    // backing volume. Until then, pass a prepared disk via importPreparedDisk,
-    // or point diskPath at an existing volume.
+    // NOTE: defines the domain; the backing volume is created separately (or
+    // via importPreparedDisk). Cloud-init attaches a NoCloud seed on local hosts.
     const QString diskPath = QStringLiteral("/var/lib/libvirt/images/%1.%2")
                                  .arg(req.name, req.diskFormat);
-    const QString xml = buildDomainXml(req, diskPath);
+    const QString seed = req.cloudInit ? buildCloudInitSeed(req) : QString();
+    const QString xml = buildDomainXml(req, diskPath, seed);
     virDomainPtr dom = virDomainDefineXML(m_conn, xml.toUtf8().constData());
     if (!dom)
         throwLast(QStringLiteral("define domain"));

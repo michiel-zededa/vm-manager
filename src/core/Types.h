@@ -132,6 +132,12 @@ struct VmCreateRequest {
     QString networkName = "default";
     QString firmware = "bios";    // "bios" | "uefi"
     QString diskFormat = "qcow2";
+    // Cloud-init (NoCloud) seeding — attaches a cidata ISO on first boot.
+    bool cloudInit = false;
+    QString ciHostname;
+    QString ciUser;
+    QString ciPassword;
+    QString ciSshKey;
 };
 
 // Supported source formats for cross-platform image import.

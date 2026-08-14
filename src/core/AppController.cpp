@@ -34,6 +34,11 @@ VmCreateRequest toRequest(const QVariantMap &m) {
     r.networkName = m.value("networkName", "default").toString();
     r.firmware = m.value("firmware", "bios").toString();
     r.diskFormat = m.value("diskFormat", "qcow2").toString();
+    r.cloudInit = m.value("cloudInit", false).toBool();
+    r.ciHostname = m.value("ciHostname").toString();
+    r.ciUser = m.value("ciUser").toString();
+    r.ciPassword = m.value("ciPassword").toString();
+    r.ciSshKey = m.value("ciSshKey").toString();
     return r;
 }
 

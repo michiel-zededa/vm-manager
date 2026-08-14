@@ -298,6 +298,28 @@ Popup {
                     Text { text: qsTr("Disk format"); color: Theme.textDim; font.pixelSize: Theme.fontSm }
                     AppComboBox { id: fmtCombo; Layout.fillWidth: true; model: ["qcow2", "raw"] }
                 }
+
+                // Cloud-init (advanced)
+                ColumnLayout {
+                    visible: wizard.advanced
+                    Layout.fillWidth: true; spacing: Theme.space3
+                    AppSwitch { id: ciSwitch; text: qsTr("Cloud-init — set hostname / user / SSH key on first boot") }
+                    GridLayout {
+                        visible: ciSwitch.checked
+                        columns: 2; columnSpacing: Theme.space5; rowSpacing: Theme.space3; Layout.fillWidth: true
+                        Text { text: qsTr("Username"); color: Theme.textDim; font.pixelSize: Theme.fontSm }
+                        AppTextField { id: ciUser; Layout.fillWidth: true; placeholderText: qsTr("e.g. ubuntu") }
+                        Text { text: qsTr("Password"); color: Theme.textDim; font.pixelSize: Theme.fontSm }
+                        AppTextField { id: ciPass; Layout.fillWidth: true; echoMode: TextInput.Password }
+                        Text { text: qsTr("SSH key"); color: Theme.textDim; font.pixelSize: Theme.fontSm }
+                        AppTextField { id: ciKey; Layout.fillWidth: true; placeholderText: "ssh-ed25519 AAAA…" }
+                    }
+                    Text {
+                        visible: ciSwitch.checked
+                        text: qsTr("Needs a cloud image (cloud-init installed) and a local host + an ISO tool (genisoimage/hdiutil). Remote-host seeding is a follow-up.")
+                        color: Theme.textFaint; font.pixelSize: Theme.fontXs; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                    }
+                }
             }
 
             // ================= Step 4: review =================
@@ -354,6 +376,11 @@ Popup {
                         networkName: wizard.advanced ? netCombo.currentText : "default",
                         firmware: wizard.advanced ? fwCombo.currentText : "bios",
                         diskFormat: wizard.advanced ? fmtCombo.currentText : "qcow2",
+                        cloudInit: wizard.advanced && ciSwitch.checked,
+                        ciHostname: nameField.text.trim(),
+                        ciUser: ciUser.text.trim(),
+                        ciPassword: ciPass.text,
+                        ciSshKey: ciKey.text.trim(),
                     });
                     wizard.close();
                 }
