@@ -63,12 +63,15 @@ private:
     void setProgress(double p);
     void setStatus(const QString &s);
     void runQemuConvert(const QString &source, const QString &target, const QString &targetFormat, DoneFn done);
+    void unpackOva(const QString &ovaPath, const QString &targetFormat, DoneFn done);
+    void importDiskFromDir(const QString &dir, const QString &targetFormat, DoneFn done);
     void finishWith(const QString &path, const QString &error, DoneFn done);
 
     QProcess *m_proc = nullptr;
     bool m_busy = false;
     double m_progress = -1.0;
     QString m_statusText;
+    QString m_workDir;             // extraction dir for the current OVA import
 };
 
 } // namespace vmm

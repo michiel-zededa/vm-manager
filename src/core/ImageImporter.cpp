@@ -119,13 +119,14 @@ void ImageImporter::convert(const QString &sourcePath, const QString &targetForm
         return;
     }
 
-    // OVA/OVF: unpack + parse the descriptor, then convert the primary disk.
-    // TODO(phase-3): full multi-disk OVF (parse <Disk>/<File>/<VirtualHardware>
-    // for CPU/RAM/NICs). For now we surface a clear message.
-    if (ext == QLatin1String("ova") || ext == QLatin1String("ovf")) {
-        finishWith({}, tr("OVA/OVF import lands in phase 3; single-disk vmdk/vhdx/vdi "
-                          "conversion works today. Extract the appliance and import its disk."),
-                   done);
+    // OVA: a tar of an OVF descriptor + disk image(s). Unpack, then convert the
+    // primary disk. OVF: the descriptor sits beside its disk already.
+    if (ext == QLatin1String("ova")) {
+        unpackOva(sourcePath, targetFormat, std::move(done));
+        return;
+    }
+    if (ext == QLatin1String("ovf")) {
+        importDiskFromDir(src.dir().absolutePath(), targetFormat, std::move(done));
         return;
     }
 
@@ -136,6 +137,65 @@ void ImageImporter::convert(const QString &sourcePath, const QString &targetForm
 
     const QString target = src.dir().filePath(src.completeBaseName() + "." + targetFormat);
     runQemuConvert(sourcePath, target, targetFormat, std::move(done));
+}
+
+void ImageImporter::unpackOva(const QString &ovaPath, const QString &targetFormat, DoneFn done) {
+    const QString tar = QStandardPaths::findExecutable(QStringLiteral("tar"));
+    if (tar.isEmpty()) {
+        finishWith({}, tr("'tar' not found — needed to unpack an OVA."), done);
+        return;
+    }
+    m_workDir = QDir(QFileInfo(ovaPath).absolutePath())
+                    .filePath(QFileInfo(ovaPath).completeBaseName() + "-ova");
+    QDir().mkpath(m_workDir);
+    setStatus(tr("Unpacking %1").arg(QFileInfo(ovaPath).fileName()));
+
+    m_proc = new QProcess(this);
+    m_proc->setProgram(tar);
+    m_proc->setArguments({"-xf", ovaPath, "-C", m_workDir});
+    connect(m_proc, &QProcess::finished, this,
+            [this, targetFormat, done](int code, QProcess::ExitStatus status) {
+        const QString err = QString::fromLocal8Bit(m_proc->readAllStandardError());
+        m_proc->deleteLater();
+        m_proc = nullptr;
+        if (status == QProcess::CrashExit || code != 0) {
+            finishWith({}, err.isEmpty() ? tr("Failed to unpack the OVA") : err.trimmed(), done);
+            return;
+        }
+        importDiskFromDir(m_workDir, targetFormat, done);
+    });
+    connect(m_proc, &QProcess::errorOccurred, this, [this, done](QProcess::ProcessError) {
+        if (!m_proc) return;
+        const QString e = m_proc->errorString();
+        m_proc->deleteLater(); m_proc = nullptr;
+        finishWith({}, e, done);
+    });
+    m_proc->start();
+}
+
+void ImageImporter::importDiskFromDir(const QString &dir, const QString &targetFormat, DoneFn done) {
+    // Pick the largest disk-like file in the extracted appliance.
+    static const QStringList diskExts = {"vmdk", "vhdx", "vhd", "vdi", "qcow2", "img", "raw"};
+    QFileInfo best;
+    const QFileInfoList entries = QDir(dir).entryInfoList(QDir::Files, QDir::Size);
+    for (const QFileInfo &fi : entries) {
+        if (diskExts.contains(fi.suffix().toLower())) {
+            if (best.filePath().isEmpty() || fi.size() > best.size())
+                best = fi;
+        }
+    }
+    if (best.filePath().isEmpty()) {
+        finishWith({}, tr("No disk image found inside the appliance."), done);
+        return;
+    }
+    const QString diskExt = best.suffix().toLower();
+    if (diskExt == QLatin1String("qcow2") || diskExt == QLatin1String("raw") || diskExt == QLatin1String("img")) {
+        setStatus(tr("Registering %1").arg(best.fileName()));
+        finishWith(best.absoluteFilePath(), {}, done);
+        return;
+    }
+    const QString target = QDir(dir).filePath(best.completeBaseName() + "." + targetFormat);
+    runQemuConvert(best.absoluteFilePath(), target, targetFormat, std::move(done));
 }
 
 void ImageImporter::runQemuConvert(const QString &source, const QString &target,
