@@ -48,8 +48,8 @@ Item {
                                             .arg(Qt.formatDateTime(nextRun, "MMM d, HH:mm"))
                                        color: Theme.textDim; font.pixelSize: Theme.fontXs }
                             }
-                            Switch { checked: enabled; onToggled: App.scheduler.setEnabled(uuid, checked) }
-                            IconButton { glyph: "🗑"; tooltip: qsTr("Remove"); onClicked: App.scheduler.removeSchedule(uuid) }
+                            AppSwitch { checked: enabled; onToggled: App.scheduler.setEnabled(uuid, checked) }
+                            IconButton { glyph: "🗑"; tip: qsTr("Remove"); danger: true; onClicked: App.scheduler.removeSchedule(uuid) }
                         }
                     }
                 }

@@ -33,7 +33,7 @@ Item {
                 Text { text: root.vm ? root.vm.name : ""; color: Theme.text; font.pixelSize: Theme.fontXxl; font.weight: Font.DemiBold }
                 RowLayout {
                     spacing: Theme.space3
-                    StatusBadge { state: root.vm ? root.vm.state : 0; label: root.vm ? (root.isRunning ? qsTr("Running") : root.isPaused ? qsTr("Paused") : qsTr("Stopped")) : "" }
+                    StatusBadge { state: root.vm ? Number(root.vm.state) : 0; label: root.vm ? (root.isRunning ? qsTr("Running") : root.isPaused ? qsTr("Paused") : qsTr("Stopped")) : "" }
                     Text { text: root.vm ? root.vm.osLabel : ""; color: Theme.textDim; font.pixelSize: Theme.fontSm }
                 }
             }
@@ -48,6 +48,14 @@ Item {
             IconButton { glyph: "⋯"; tooltip: qsTr("More"); onClicked: moreMenu.open()
                 Menu {
                     id: moreMenu
+                    background: Rectangle { implicitWidth: 200; radius: Theme.radiusSm
+                        color: Theme.surface; border.width: 1; border.color: Theme.border }
+                    delegate: MenuItem {
+                        id: mi
+                        contentItem: Text { text: mi.text; color: Theme.text; font.pixelSize: Theme.fontMd
+                            verticalAlignment: Text.AlignVCenter; leftPadding: Theme.space2 }
+                        background: Rectangle { color: mi.highlighted ? Theme.accentSubtle : "transparent"; radius: Theme.radiusSm }
+                    }
                     MenuItem { text: qsTr("Clone…"); onTriggered: cloneDialog.open() }
                     MenuItem { text: root.vm && root.vm.isTemplate ? qsTr("Unmark template") : qsTr("Mark as template")
                                onTriggered: App.markTemplate(root.vm.connectionId, root.vm.uuid, !(root.vm && root.vm.isTemplate)) }
@@ -65,9 +73,9 @@ Item {
             id: tabs
             Layout.fillWidth: true
             background: Rectangle { color: "transparent" }
-            TabButton { text: qsTr("Overview"); width: implicitWidth + Theme.space5 }
-            TabButton { text: qsTr("Console"); width: implicitWidth + Theme.space5 }
-            TabButton { text: qsTr("Snapshots"); width: implicitWidth + Theme.space5 }
+            AppTabButton { text: qsTr("Overview"); width: implicitWidth + Theme.space5 }
+            AppTabButton { text: qsTr("Console"); width: implicitWidth + Theme.space5 }
+            AppTabButton { text: qsTr("Snapshots"); width: implicitWidth + Theme.space5 }
         }
 
         StackLayout {
@@ -178,23 +186,15 @@ Item {
     // Take-snapshot dialog
     Dialog {
         id: takeDialog
-        anchors.centerIn: parent; modal: true; width: 420
+        anchors.centerIn: parent; modal: true; width: 440; padding: Theme.space5
         background: Card {}
+        onOpened: snapName.text = "snap-" + Qt.formatDateTime(new Date(), "yyyyMMdd-HHmmss")
         contentItem: ColumnLayout {
             spacing: Theme.space4
             Text { text: qsTr("Take snapshot"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
-            TextField {
-                id: snapName; Layout.fillWidth: true; color: Theme.text
-                placeholderText: qsTr("Snapshot name")
-                text: "snap-" + Qt.formatDateTime(new Date(), "yyyyMMdd-HHmmss")
-                background: Rectangle { radius: Theme.radiusSm; color: Theme.surfaceAlt; border.color: Theme.border; border.width: 1 }
-            }
-            TextField {
-                id: snapDesc; Layout.fillWidth: true; color: Theme.text
-                placeholderText: qsTr("Description (optional)")
-                background: Rectangle { radius: Theme.radiusSm; color: Theme.surfaceAlt; border.color: Theme.border; border.width: 1 }
-            }
-            CheckBox { id: snapMem; text: qsTr("Include memory state (VM must be running)"); enabled: root.isRunning }
+            AppTextField { id: snapName; Layout.fillWidth: true; placeholderText: qsTr("Snapshot name") }
+            AppTextField { id: snapDesc; Layout.fillWidth: true; placeholderText: qsTr("Description (optional)") }
+            AppCheckBox { id: snapMem; text: qsTr("Include memory state (VM must be running)"); enabled: root.isRunning }
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
@@ -208,23 +208,14 @@ Item {
     // Schedule dialog
     Dialog {
         id: scheduleDialog
-        anchors.centerIn: parent; modal: true; width: 440
+        anchors.centerIn: parent; modal: true; width: 460; padding: Theme.space5
         background: Card {}
         contentItem: ColumnLayout {
             spacing: Theme.space4
             Text { text: qsTr("Scheduled snapshots"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
             Text { text: qsTr("Automatically snapshot this VM on an interval and keep the newest N."); color: Theme.textDim; font.pixelSize: Theme.fontSm; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            RowLayout {
-                spacing: Theme.space3
-                Text { text: qsTr("Every"); color: Theme.text }
-                SpinBox { id: everyMin; from: 5; to: 10080; value: 60; stepSize: 5 }
-                Text { text: qsTr("minutes"); color: Theme.textDim }
-            }
-            RowLayout {
-                spacing: Theme.space3
-                Text { text: qsTr("Keep newest"); color: Theme.text }
-                SpinBox { id: retain; from: 1; to: 100; value: 7 }
-            }
+            LabeledSlider { id: everyMin; label: qsTr("Every"); from: 5; to: 1440; stepSize: 5; value: 60; unit: "min" }
+            LabeledSlider { id: retain; label: qsTr("Keep newest"); from: 1; to: 60; stepSize: 1; value: 7; unit: "snaps" }
             RowLayout {
                 Layout.fillWidth: true
                 AppButton { text: qsTr("Remove schedule"); variant: "ghost"
@@ -232,7 +223,7 @@ Item {
                 Item { Layout.fillWidth: true }
                 AppButton { text: qsTr("Cancel"); variant: "ghost"; onClicked: scheduleDialog.close() }
                 AppButton { text: qsTr("Save"); variant: "primary"
-                    onClicked: { if (root.vm) App.scheduler.addSchedule(root.vm.connectionId, root.vm.uuid, root.vm.name, everyMin.value, retain.value); scheduleDialog.close(); } }
+                    onClicked: { if (root.vm) App.scheduler.addSchedule(root.vm.connectionId, root.vm.uuid, root.vm.name, Math.round(everyMin.value), Math.round(retain.value)); scheduleDialog.close(); } }
             }
         }
     }
@@ -240,18 +231,14 @@ Item {
     // Clone dialog
     Dialog {
         id: cloneDialog
-        anchors.centerIn: parent; modal: true; width: 420
+        anchors.centerIn: parent; modal: true; width: 440; padding: Theme.space5
         background: Card {}
+        onOpened: cloneName.text = root.vm ? root.vm.name + "-clone" : ""
         contentItem: ColumnLayout {
             spacing: Theme.space4
             Text { text: qsTr("Clone VM"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
-            TextField {
-                id: cloneName; Layout.fillWidth: true; color: Theme.text
-                placeholderText: qsTr("New VM name")
-                text: root.vm ? root.vm.name + "-clone" : ""
-                background: Rectangle { radius: Theme.radiusSm; color: Theme.surfaceAlt; border.color: Theme.border; border.width: 1 }
-            }
-            CheckBox { id: linkedClone; text: qsTr("Linked clone (share backing image, faster)"); }
+            AppTextField { id: cloneName; Layout.fillWidth: true; placeholderText: qsTr("New VM name") }
+            AppCheckBox { id: linkedClone; text: qsTr("Linked clone (share backing image, faster)") }
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }
@@ -265,13 +252,13 @@ Item {
     // Delete confirmation
     Dialog {
         id: deleteDialog
-        anchors.centerIn: parent; modal: true; width: 420
+        anchors.centerIn: parent; modal: true; width: 440; padding: Theme.space5
         background: Card {}
         contentItem: ColumnLayout {
             spacing: Theme.space4
             Text { text: qsTr("Delete %1?").arg(root.vm ? root.vm.name : ""); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
             Text { text: qsTr("This removes the VM definition. Choose whether to also delete its disks."); color: Theme.textDim; font.pixelSize: Theme.fontSm; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-            CheckBox { id: removeStorage; text: qsTr("Also delete disk images (irreversible)") }
+            AppCheckBox { id: removeStorage; text: qsTr("Also delete disk images (irreversible)") }
             RowLayout {
                 Layout.fillWidth: true
                 Item { Layout.fillWidth: true }

@@ -75,7 +75,7 @@ QtObject {
 
     // ---- Typography --------------------------------------------------------
     readonly property string fontFamily: Qt.application.font.family
-    readonly property string monoFamily: "Menlo, Consolas, monospace"
+    readonly property string monoFamily: "monospace"
     readonly property int fontXs: 11
     readonly property int fontSm: 12
     readonly property int fontMd: 14

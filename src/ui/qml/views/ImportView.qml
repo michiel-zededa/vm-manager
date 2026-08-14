@@ -75,10 +75,9 @@ Popup {
             Text { text: qsTr("Detected: .%1").arg(importer.detected); color: Theme.textDim; font.pixelSize: Theme.fontSm }
         }
 
-        TextField {
-            id: nameField; Layout.fillWidth: true; color: Theme.text
+        AppTextField {
+            id: nameField; Layout.fillWidth: true
             placeholderText: qsTr("New VM name")
-            background: Rectangle { radius: Theme.radiusSm; color: Theme.surfaceAlt; border.color: Theme.border; border.width: 1 }
         }
 
         // Progress
