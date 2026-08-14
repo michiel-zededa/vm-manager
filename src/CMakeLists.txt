@@ -75,6 +75,7 @@ qt_add_qml_module(vm-manager
         ui/qml/components/LabeledSlider.qml
         ui/qml/components/ConnectionDialog.qml
         ui/qml/components/DependencyDialog.qml
+        ui/qml/components/IsoPickerDialog.qml
         ui/qml/components/IconButton.qml
         ui/qml/components/Card.qml
         ui/qml/components/StatusBadge.qml

@@ -241,7 +241,13 @@ Popup {
                         Layout.fillWidth: true; spacing: Theme.space2
                         AppTextField { id: isoField; Layout.fillWidth: true
                             placeholderText: qsTr("/path/to/installer.iso") }
-                        AppButton { text: qsTr("Browse…"); variant: "ghost"; onClicked: isoDialog.open() }
+                        AppButton { text: qsTr("Host pools…"); variant: "ghost"
+                            onClicked: { isoPicker.connId = App.currentConnectionId; isoPicker.open(); } }
+                        AppButton { text: qsTr("Local…"); variant: "ghost"; onClicked: isoDialog.open() }
+                    }
+                    Text {
+                        text: qsTr("Tip: for a remote host, pick an ISO from its storage pools — a file on this Mac isn't reachable by the remote hypervisor.")
+                        color: Theme.textFaint; font.pixelSize: Theme.fontXs; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
                     Text {
                         visible: wizard.osFamily === "linux"
@@ -350,5 +356,10 @@ Popup {
         title: qsTr("Select install ISO")
         nameFilters: ["Disc images (*.iso *.img)", "All files (*)"]
         onAccepted: isoField.text = selectedFile.toString().replace("file://", "")
+    }
+
+    IsoPickerDialog {
+        id: isoPicker
+        onPicked: (path) => isoField.text = path
     }
 }
