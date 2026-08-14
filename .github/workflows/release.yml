@@ -1,0 +1,91 @@
+name: Release
+
+# Cut a release by pushing a semver tag:
+#   git tag v0.1.0 && git push origin v0.1.0
+# This builds a self-contained package per OS (Qt runtime bundled by the
+# platform deploy tool) and attaches each as a release asset.
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write   # needed to create the release + upload assets
+
+jobs:
+  package:
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: vm-manager-linux-x86_64.tar.gz
+          - os: macos-latest
+            asset: vm-manager-macos.dmg
+          - os: windows-latest
+            asset: vm-manager-windows-x64.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev ninja-build
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          cache: true
+          modules: 'qtdeclarative'
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVMM_WITH_LIBVIRT=OFF -DVMM_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      # ---- macOS: bundle Qt into the .app, then produce a .dmg -------------
+      - name: Deploy + package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          macdeployqt build/vm-manager.app -qmldir=src/ui/qml
+          # Bundle qemu-img for self-contained image import, if available.
+          if command -v qemu-img >/dev/null 2>&1; then
+            cp "$(command -v qemu-img)" build/vm-manager.app/Contents/MacOS/ || true
+          fi
+          hdiutil create -volname "VM Manager" -srcfolder build/vm-manager.app \
+            -ov -format UDZO "${{ matrix.asset }}"
+
+      # ---- Windows: bundle Qt next to the exe, then zip -------------------
+      - name: Deploy + package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/vm-manager | Out-Null
+          Copy-Item build/vm-manager.exe dist/vm-manager/
+          windeployqt --qmldir src/ui/qml dist/vm-manager/vm-manager.exe
+          Compress-Archive -Path dist/vm-manager/* -DestinationPath "${{ matrix.asset }}"
+
+      # ---- Linux: stage binary + QML, tar it ------------------------------
+      # A fully-relocatable AppImage (via linuxdeploy) is a phase-4 follow-up.
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/vm-manager
+          cp build/vm-manager dist/vm-manager/
+          tar -czf "${{ matrix.asset }}" -C dist vm-manager
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: ${{ matrix.asset }}
+          generate_release_notes: true

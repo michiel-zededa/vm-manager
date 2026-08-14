@@ -1,0 +1,51 @@
+# Build directories
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/dist/
+
+# Qt / QML
+*.qmlc
+*.jsc
+.qmake.stash
+.qmake.cache
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qm
+
+# Packaging outputs
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+*.msi
+*.exe
+!**/resources/**/*.exe
+
+# IDE / editors
+.idea/
+.vscode/
+*.user
+*.user.*
+.cache/
+compile_commands.json
+.DS_Store
+Thumbs.db
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+_deps/
+
+# Misc
+*.log
+*.tmp
+# Core dumps (anchored so it never matches the src/core/ directory)
+/core
+core.[0-9]*
