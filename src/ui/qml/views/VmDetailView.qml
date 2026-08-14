@@ -10,8 +10,19 @@ Item {
     property var vm: null
     signal back()
 
-    property bool isRunning: vm && vm.state === 1
-    property bool isPaused: vm && vm.state === 2
+    // Live view of the VM: the passed-in map is a point-in-time capture, so we
+    // re-read it from the model to keep state/console/actions current.
+    property var live: vm
+    function refresh() {
+        if (vm && vm.uuid) { var m = App.vms.vmMap(vm.uuid); if (m && m.uuid) live = m; }
+    }
+    Component.onCompleted: refresh()
+    Connections { target: App; function onVmActionCompleted(uuid, action) { if (root.vm && uuid === root.vm.uuid) root.refresh(); } }
+    Connections { target: App.vms; function onCountChanged() { root.refresh(); } }
+    Timer { interval: 2000; running: true; repeat: true; onTriggered: root.refresh() }
+
+    property bool isRunning: live && live.state === 1
+    property bool isPaused: live && live.state === 2
     function gib(kib) { return (kib / 1048576).toFixed(kib >= 1048576 ? 0 : 1) + " GiB"; }
 
     ColumnLayout {
@@ -33,7 +44,7 @@ Item {
                 Text { text: root.vm ? root.vm.name : ""; color: Theme.text; font.pixelSize: Theme.fontXxl; font.weight: Font.DemiBold }
                 RowLayout {
                     spacing: Theme.space3
-                    StatusBadge { state: root.vm ? Number(root.vm.state) : 0; label: root.vm ? (root.isRunning ? qsTr("Running") : root.isPaused ? qsTr("Paused") : qsTr("Stopped")) : "" }
+                    StatusBadge { state: root.live ? Number(root.live.state) : 0; label: root.live ? (root.isRunning ? qsTr("Running") : root.isPaused ? qsTr("Paused") : qsTr("Stopped")) : "" }
                     Text { text: root.vm ? root.vm.osLabel : ""; color: Theme.textDim; font.pixelSize: Theme.fontSm }
                 }
             }
@@ -122,7 +133,7 @@ Item {
             }
 
             // --- Console ---
-            ConsoleView { vm: root.vm }
+            ConsoleView { vm: root.live }
 
             // --- Snapshots (inline panel) ---
             ColumnLayout {
@@ -157,18 +168,45 @@ Item {
                         clip: true
                         model: snapModel
                         spacing: Theme.space1
-                        delegate: RowLayout {
+                        delegate: Item {
+                            required property string name
+                            required property bool isCurrent
+                            required property bool hasMemory
+                            required property string description
+                            required property var created
                             width: ListView.view.width
-                            height: 52
-                            spacing: Theme.space3
-                            Rectangle { width: 8; height: 8; radius: 4; color: isCurrent ? Theme.running : Theme.stopped; Layout.leftMargin: Theme.space2 }
-                            ColumnLayout {
-                                spacing: 0; Layout.fillWidth: true
-                                Text { text: name; color: Theme.text; font.pixelSize: Theme.fontMd; font.weight: Font.Medium }
-                                Text { text: (hasMemory ? qsTr("Full (with memory)") : qsTr("Disk only")) + (description ? " · " + description : ""); color: Theme.textDim; font.pixelSize: Theme.fontXs }
+                            height: 56
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.space2
+                                anchors.rightMargin: Theme.space2
+                                spacing: Theme.space3
+                                Rectangle { width: 8; height: 8; radius: 4; Layout.alignment: Qt.AlignVCenter
+                                    color: isCurrent ? Theme.running : Theme.stopped }
+                                ColumnLayout {
+                                    spacing: 1; Layout.fillWidth: true
+                                    RowLayout {
+                                        spacing: Theme.space2
+                                        Text { text: name; color: Theme.text; font.pixelSize: Theme.fontMd
+                                            font.weight: Font.Medium; elide: Text.ElideRight; Layout.maximumWidth: 340 }
+                                        Rectangle { visible: isCurrent; height: 16; radius: 8; color: Theme.accentSubtle
+                                            implicitWidth: curT.implicitWidth + 12
+                                            Text { id: curT; anchors.centerIn: parent; text: qsTr("current")
+                                                color: Theme.accent; font.pixelSize: Theme.fontXs } }
+                                    }
+                                    Text {
+                                        text: (hasMemory ? qsTr("Full (with memory)") : qsTr("Disk only"))
+                                              + (created ? " · " + Qt.formatDateTime(created, "MMM d, HH:mm") : "")
+                                              + (description ? " · " + description : "")
+                                        color: Theme.textDim; font.pixelSize: Theme.fontXs
+                                        elide: Text.ElideRight; Layout.fillWidth: true
+                                    }
+                                }
+                                AppButton { text: qsTr("Restore"); variant: "subtle"; Layout.alignment: Qt.AlignVCenter
+                                    onClicked: App.restoreSnapshot(root.vm.connectionId, root.vm.uuid, name) }
+                                IconButton { glyph: "🗑"; tip: qsTr("Delete"); danger: true; Layout.alignment: Qt.AlignVCenter
+                                    onClicked: App.deleteSnapshot(root.vm.connectionId, root.vm.uuid, name) }
                             }
-                            AppButton { text: qsTr("Restore"); variant: "subtle"; onClicked: App.restoreSnapshot(root.vm.connectionId, root.vm.uuid, name) }
-                            IconButton { glyph: "🗑"; tooltip: qsTr("Delete"); onClicked: App.deleteSnapshot(root.vm.connectionId, root.vm.uuid, name) }
                         }
                     }
                     EmptyState {
@@ -210,6 +248,15 @@ Item {
         id: scheduleDialog
         anchors.centerIn: parent; modal: true; width: 460; padding: Theme.space5
         background: Card {}
+        // Prefill from an existing schedule so it can be edited, not just re-created.
+        onOpened: {
+            everyMin.value = 60; retain.value = 7;
+            var list = App.scheduler.schedules();
+            for (var i = 0; i < list.length; ++i)
+                if (root.vm && list[i].uuid === root.vm.uuid) {
+                    everyMin.value = list[i].intervalMinutes; retain.value = list[i].retain; break;
+                }
+        }
         contentItem: ColumnLayout {
             spacing: Theme.space4
             Text { text: qsTr("Scheduled snapshots"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }

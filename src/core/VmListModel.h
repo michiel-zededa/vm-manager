@@ -5,6 +5,7 @@
 #include <QAbstractListModel>
 #include <QList>
 #include <QHash>
+#include <QVariantMap>
 
 namespace vmm {
 
@@ -52,6 +53,8 @@ public:
 
     int runningCount() const;
     Q_INVOKABLE int indexOfUuid(const QString &uuid) const;
+    // Live snapshot of one VM's fields (for the detail view to stay current).
+    Q_INVOKABLE QVariantMap vmMap(const QString &uuid) const;
 
 signals:
     void countChanged();

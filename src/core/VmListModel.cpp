@@ -78,6 +78,19 @@ int VmListModel::indexOfUuid(const QString &uuid) const {
     return -1;
 }
 
+QVariantMap VmListModel::vmMap(const QString &uuid) const {
+    const int i = indexOfUuid(uuid);
+    if (i < 0) return {};
+    const VmInfo &v = m_vms.at(i);
+    return {
+        {"uuid", v.uuid}, {"connectionId", v.connectionId}, {"name", v.name},
+        {"osLabel", v.osLabel}, {"title", v.title}, {"state", int(v.state)},
+        {"stateText", stateText(v.state)}, {"vcpus", v.vcpus},
+        {"memoryMax", QVariant::fromValue(v.memoryMaxKiB)},
+        {"autostart", v.autostart}, {"isTemplate", v.isTemplate},
+    };
+}
+
 void VmListModel::mergeConnection(const QString &connId, const QList<VmInfo> &vms) {
     // Simple + correct: drop this connection's rows and re-insert. The set of
     // VMs on a host changes rarely; per-row stat updates use applyStats().

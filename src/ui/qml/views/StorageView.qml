@@ -16,6 +16,24 @@ Item {
         if (b >= 1048576) return (b / 1048576).toFixed(0) + " MiB";
         return b + " B";
     }
+    // Friendly, capitalized labels for libvirt pool types.
+    function friendlyType(t) {
+        switch ((t || "").toLowerCase()) {
+        case "dir":     return qsTr("Directory");
+        case "fs":      return qsTr("Filesystem");
+        case "netfs":   return qsTr("Network FS");
+        case "nfs":     return qsTr("NFS");
+        case "logical": return qsTr("LVM group");
+        case "disk":    return qsTr("Disk");
+        case "iscsi":
+        case "iscsi-direct": return qsTr("iSCSI");
+        case "scsi":    return qsTr("SCSI");
+        case "zfs":     return qsTr("ZFS");
+        case "rbd":     return qsTr("Ceph RBD");
+        case "gluster": return qsTr("Gluster");
+        default:        return t ? t.charAt(0).toUpperCase() + t.slice(1) : qsTr("Pool");
+        }
+    }
 
     property var volumesByPool: ({})     // poolName -> array of volume maps
     property var expanded: ({})          // poolName -> bool
@@ -89,11 +107,14 @@ Item {
                             RowLayout {
                                 Layout.fillWidth: true
                                 spacing: Theme.space3
-                                Text {
-                                    text: poolCard.isOpen ? "▾" : "▸"
-                                    color: Theme.textDim; font.pixelSize: Theme.fontSm
+                                Rectangle {
+                                    width: 28; height: 28; radius: Theme.radiusSm
+                                    color: chevHover.hovered ? Theme.surfaceHover : Theme.surfaceAlt
+                                    border.width: 1; border.color: Theme.border
+                                    Text { anchors.centerIn: parent; text: poolCard.isOpen ? "▾" : "▸"
+                                        color: Theme.accent; font.pixelSize: Theme.fontMd; font.bold: true }
+                                    HoverHandler { id: chevHover; cursorShape: Qt.PointingHandCursor }
                                     TapHandler { onTapped: root.toggle(poolCard.name) }
-                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                                 }
                                 Rectangle { width: 8; height: 8; radius: 4
                                     color: poolCard.active ? Theme.running : Theme.stopped }
@@ -103,7 +124,7 @@ Item {
                                     HoverHandler { cursorShape: Qt.PointingHandCursor } }
                                 Rectangle { height: 18; radius: 9; color: Theme.surfaceAlt
                                     implicitWidth: typeText.implicitWidth + 14
-                                    Text { id: typeText; anchors.centerIn: parent; text: poolCard.type
+                                    Text { id: typeText; anchors.centerIn: parent; text: root.friendlyType(poolCard.type)
                                         color: Theme.textDim; font.pixelSize: Theme.fontXs } }
                                 Item { Layout.fillWidth: true }
                                 Text {

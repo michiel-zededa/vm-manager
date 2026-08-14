@@ -120,6 +120,16 @@ Dialog {
             AppCheckBox { id: noVerify; text: qsTr("Skip host key verification") }
         }
 
+        // First-connection host-key hint (the usual cause of "Host key
+        // verification failed", whether using a key or a password).
+        Text {
+            visible: dlg.mode === 1 && !noVerify.checked
+            text: qsTr("First time connecting to a host? Tick “Skip host key verification” — "
+                     + "otherwise the connection fails with “Host key verification failed” until the "
+                     + "host is in ~/.ssh/known_hosts.")
+            color: Theme.warning; font.pixelSize: Theme.fontXs; wrapMode: Text.WordWrap; Layout.fillWidth: true
+        }
+
         // Password storage note (honest about scope)
         Text {
             visible: dlg.mode === 1 && pwField.text.length > 0
