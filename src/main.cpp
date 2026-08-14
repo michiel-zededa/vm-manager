@@ -4,6 +4,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QIcon>
 
 using namespace vmm;
 
@@ -19,6 +20,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication::setOrganizationDomain("vm-manager.dev");
     QGuiApplication::setApplicationName("VM Manager");
     QGuiApplication::setApplicationVersion(PROJECT_VERSION);
+    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/app.png")));
 
     // Neutral base style; the app's look comes from our own QML components.
     QQuickStyle::setStyle("Basic");

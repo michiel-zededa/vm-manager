@@ -60,13 +60,11 @@ ApplicationWindow {
                 // Brand
                 RowLayout {
                     spacing: Theme.space3
-                    Rectangle {
-                        width: 32; height: 32; radius: Theme.radiusSm
-                        gradient: Gradient {
-                            GradientStop { position: 0; color: Theme.accent }
-                            GradientStop { position: 1; color: "#8B5CF6" }
-                        }
-                        Text { anchors.centerIn: parent; text: "▣"; color: "white"; font.pixelSize: 18 }
+                    Image {
+                        width: 32; height: 32
+                        sourceSize.width: 64; sourceSize.height: 64
+                        source: "qrc:/icons/app.png"
+                        smooth: true
                     }
                     ColumnLayout {
                         spacing: 0

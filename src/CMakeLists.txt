@@ -1,5 +1,6 @@
 qt_add_executable(vm-manager WIN32 MACOSX_BUNDLE
     main.cpp
+    icon.qrc
     core/Backend.h
     core/Types.h
     core/MockBackend.h        core/MockBackend.cpp
@@ -18,6 +19,25 @@ target_compile_definitions(vm-manager PRIVATE PROJECT_VERSION="${PROJECT_VERSION
 # README/BUILDING (./build/vm-manager[.app]) resolve regardless of platform.
 set_target_properties(vm-manager PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+# ---------------------------------------------------------------------------
+# Application icon (per platform)
+# ---------------------------------------------------------------------------
+if(APPLE)
+    set(_app_icon "${CMAKE_SOURCE_DIR}/assets/AppIcon.icns")
+    if(EXISTS "${_app_icon}")
+        set_source_files_properties(${_app_icon} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+        target_sources(vm-manager PRIVATE ${_app_icon})
+        set_target_properties(vm-manager PROPERTIES
+            MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
+            MACOSX_BUNDLE_BUNDLE_NAME "VM Manager"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "dev.vm-manager.app")
+    endif()
+elseif(WIN32)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/assets/app_icon.rc")
+        target_sources(vm-manager PRIVATE ${CMAKE_SOURCE_DIR}/assets/app_icon.rc)
+    endif()
+endif()
 
 target_link_libraries(vm-manager PRIVATE
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Concurrent
