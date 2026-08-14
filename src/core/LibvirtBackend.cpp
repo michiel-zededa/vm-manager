@@ -27,10 +27,45 @@ struct FreeStr {
 };
 } // namespace
 
-LibvirtBackend::LibvirtBackend(QString uri, QString displayName)
-    : m_uri(std::move(uri)), m_displayName(std::move(displayName)) {}
+LibvirtBackend::LibvirtBackend(QString uri, QString displayName,
+                               QString username, QString password)
+    : m_uri(std::move(uri)), m_displayName(std::move(displayName)),
+      m_username(std::move(username)), m_password(std::move(password)) {}
 
 LibvirtBackend::~LibvirtBackend() { close(); }
+
+namespace {
+// Credential callback for virConnectOpenAuth: supplies the stored username /
+// password so libssh2 password auth can proceed without a TTY prompt.
+struct AuthData { QByteArray user; QByteArray pass; };
+
+int authCallback(virConnectCredentialPtr cred, unsigned int ncred, void *cbdata) {
+    auto *data = static_cast<AuthData *>(cbdata);
+    for (unsigned int i = 0; i < ncred; ++i) {
+        QByteArray value;
+        switch (cred[i].type) {
+        case VIR_CRED_AUTHNAME:
+        case VIR_CRED_USERNAME:
+        case VIR_CRED_ECHOPROMPT:
+            value = data->user;
+            break;
+        case VIR_CRED_PASSPHRASE:
+        case VIR_CRED_NOECHOPROMPT:
+            value = data->pass;
+            break;
+        default:
+            break;
+        }
+        if (value.isEmpty() && cred[i].defresult)
+            value = QByteArray(cred[i].defresult);
+        cred[i].result = strdup(value.constData());
+        if (!cred[i].result)
+            return -1;
+        cred[i].resultlen = uint(value.length());
+    }
+    return 0;
+}
+} // namespace
 
 void LibvirtBackend::throwLast(const QString &context) {
     virErrorPtr err = virGetLastError();
@@ -42,7 +77,22 @@ void LibvirtBackend::throwLast(const QString &context) {
 void LibvirtBackend::open() {
     if (m_conn)
         return;
-    m_conn = virConnectOpen(m_uri.toUtf8().constData());
+    if (!m_password.isEmpty()) {
+        // Password auth (libssh2 transport) needs an auth callback.
+        AuthData data{ m_username.toUtf8(), m_password.toUtf8() };
+        int credTypes[] = {
+            VIR_CRED_AUTHNAME, VIR_CRED_USERNAME, VIR_CRED_ECHOPROMPT,
+            VIR_CRED_PASSPHRASE, VIR_CRED_NOECHOPROMPT, VIR_CRED_REALM,
+        };
+        virConnectAuth auth;
+        auth.credtype = credTypes;
+        auth.ncredtype = int(sizeof(credTypes) / sizeof(credTypes[0]));
+        auth.cb = authCallback;
+        auth.cbdata = &data;
+        m_conn = virConnectOpenAuth(m_uri.toUtf8().constData(), &auth, 0);
+    } else {
+        m_conn = virConnectOpen(m_uri.toUtf8().constData());
+    }
     if (!m_conn)
         throwLast(QStringLiteral("Failed to connect to %1").arg(m_uri));
 }

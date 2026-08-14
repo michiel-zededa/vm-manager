@@ -18,18 +18,28 @@ Dialog {
     property int mode: 1                  // 0 = local, 1 = remote (ssh)
     property string localScope: "session" // session | system
 
+    // Password auth requires the libssh2 transport (OpenSSH can't take a
+    // password without a TTY); keys/agent use the standard ssh transport.
+    function usePassword() {
+        return mode === 1 && pwField.text.trim().length > 0 && keyField.text.trim().length === 0;
+    }
     function buildUri() {
         if (mode === 0)
             return "qemu:///" + localScope;
-        var base = App.buildConnectionUri("ssh", hostField.text.trim(),
+        var transport = usePassword() ? "libssh2" : "ssh";
+        var base = App.buildConnectionUri(transport, hostField.text.trim(),
                                           userField.text.trim(),
                                           parseInt(portField.text) || 0,
                                           pathField.text.trim());
         var q = [];
-        if (keyField.text.trim().length > 0)
-            q.push("keyfile=" + encodeURIComponent(keyField.text.trim()));
-        if (noVerify.checked)
-            q.push("no_verify=1");
+        if (usePassword()) {
+            q.push("sshauth=password");
+            if (noVerify.checked) q.push("known_hosts_verify=ignore");
+        } else {
+            if (keyField.text.trim().length > 0)
+                q.push("keyfile=" + encodeURIComponent(keyField.text.trim()));
+            if (noVerify.checked) q.push("no_verify=1");
+        }
         return q.length ? base + "?" + q.join("&") : base;
     }
 
@@ -138,7 +148,9 @@ Dialog {
                 enabled: dlg.mode === 0 || hostField.text.trim().length > 0
                 onClicked: {
                     var uri = dlg.buildUri();
-                    App.addConnection(uri, nameField.text.trim() || uri);
+                    App.addConnection(uri, nameField.text.trim() || uri,
+                                      userField.text.trim(),
+                                      dlg.usePassword() ? pwField.text : "");
                     dlg.close();
                 }
             }

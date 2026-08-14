@@ -22,11 +22,15 @@ public:
     ~ConnectionManager() override;
 
     // Create + register a backend for a URI. Chooses the real libvirt backend
-    // when available, otherwise the mock. Does not open it yet.
-    QString addConnection(const QString &uri, const QString &displayName);
+    // when available, otherwise the mock. Does not open it yet. Optional
+    // username/password are used for libssh2 password auth.
+    QString addConnection(const QString &uri, const QString &displayName,
+                          const QString &username = {}, const QString &password = {});
 
     // Open (connect) asynchronously; emits connectionStateChanged on completion.
     void openConnection(const QString &connId);
+    // Close (disconnect) asynchronously; emits connectionStateChanged(false).
+    void closeConnection(const QString &connId);
     void removeConnection(const QString &connId);
 
     QStringList connectionIds() const;

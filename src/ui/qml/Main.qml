@@ -129,37 +129,76 @@ ApplicationWindow {
                     spacing: Theme.space1
                     model: App.connections
                     delegate: ItemDelegate {
+                        id: hostDel
+                        required property string id
+                        required property string displayName
+                        required property string uri
+                        required property bool connected
+                        required property bool isLocal
+                        required property int activeVms
+                        required property int totalVms
+                        required property string lastError
                         width: hostList.width
                         height: 48
                         hoverEnabled: true
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
-                        onClicked: App.currentConnectionId = id
+                        onClicked: App.currentConnectionId = hostDel.id
+                        ToolTip.visible: hostDel.lastError.length > 0 && hovered
+                        ToolTip.text: hostDel.lastError
                         background: Rectangle {
                             radius: Theme.radiusSm
-                            color: App.currentConnectionId === id ? Theme.accentSubtle
+                            color: App.currentConnectionId === hostDel.id ? Theme.accentSubtle
                                    : parent.hovered ? Theme.surfaceAlt : "transparent"
                         }
                         contentItem: RowLayout {
                             spacing: Theme.space3
                             Rectangle {
                                 width: 8; height: 8; radius: 4
-                                color: connected ? Theme.running : Theme.stopped
+                                color: hostDel.connected ? Theme.running
+                                       : hostDel.lastError.length > 0 ? Theme.danger : Theme.stopped
                             }
                             ColumnLayout {
                                 spacing: 0
                                 Layout.fillWidth: true
                                 Text {
-                                    text: displayName; color: Theme.text
+                                    text: hostDel.displayName; color: Theme.text
                                     font.pixelSize: Theme.fontSm; elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
                                 Text {
-                                    text: isLocal ? qsTr("local") : uri
+                                    text: hostDel.isLocal ? qsTr("local") : hostDel.uri
                                     color: Theme.textFaint; font.pixelSize: Theme.fontXs
                                     elide: Text.ElideMiddle; Layout.fillWidth: true
                                 }
                             }
-                            Text { text: activeVms + "/" + totalVms; color: Theme.textDim; font.pixelSize: Theme.fontXs }
+                            Text {
+                                visible: !hostDel.hovered
+                                text: hostDel.activeVms + "/" + hostDel.totalVms
+                                color: Theme.textDim; font.pixelSize: Theme.fontXs
+                            }
+                            IconButton {
+                                visible: hostDel.hovered
+                                implicitWidth: 26; implicitHeight: 26
+                                glyph: "⋯"; tip: qsTr("Manage")
+                                onClicked: hostMenu.open()
+                                Menu {
+                                    id: hostMenu
+                                    background: Rectangle { implicitWidth: 180; radius: Theme.radiusSm
+                                        color: Theme.surface; border.width: 1; border.color: Theme.border }
+                                    delegate: MenuItem {
+                                        id: hmi
+                                        contentItem: Text { text: hmi.text; color: hmi.text === qsTr("Remove") ? Theme.danger : Theme.text
+                                            font.pixelSize: Theme.fontMd; verticalAlignment: Text.AlignVCenter; leftPadding: Theme.space2 }
+                                        background: Rectangle { color: hmi.highlighted ? Theme.accentSubtle : "transparent"; radius: Theme.radiusSm }
+                                    }
+                                    MenuItem { text: hostDel.connected ? qsTr("Disconnect") : qsTr("Connect")
+                                        onTriggered: hostDel.connected ? App.disconnectConnection(hostDel.id)
+                                                                       : App.connectConnection(hostDel.id) }
+                                    MenuItem { text: qsTr("Reconnect"); onTriggered: { App.disconnectConnection(hostDel.id); App.connectConnection(hostDel.id); } }
+                                    MenuSeparator {}
+                                    MenuItem { text: qsTr("Remove"); onTriggered: App.removeConnection(hostDel.id) }
+                                }
+                            }
                         }
                     }
                 }

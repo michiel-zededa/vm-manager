@@ -17,7 +17,8 @@ namespace vmm {
 // ROADMAP.md.
 class LibvirtBackend final : public IHypervisorBackend {
 public:
-    LibvirtBackend(QString uri, QString displayName);
+    LibvirtBackend(QString uri, QString displayName,
+                   QString username = {}, QString password = {});
     ~LibvirtBackend() override;
 
     HostInfo hostInfo() override;
@@ -73,6 +74,8 @@ private:
 
     QString m_uri;
     QString m_displayName;
+    QString m_username;
+    QString m_password;
     virConnectPtr m_conn = nullptr;
 };
 

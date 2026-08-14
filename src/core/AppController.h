@@ -50,8 +50,11 @@ public:
     void bootstrap();
 
     // ---- Connection actions --------------------------------------------
-    Q_INVOKABLE void addConnection(const QString &uri, const QString &displayName);
+    Q_INVOKABLE void addConnection(const QString &uri, const QString &displayName,
+                                   const QString &username = {}, const QString &password = {});
     Q_INVOKABLE void removeConnection(const QString &connId);
+    Q_INVOKABLE void connectConnection(const QString &connId);
+    Q_INVOKABLE void disconnectConnection(const QString &connId);
     Q_INVOKABLE void refresh();
 
     // ---- VM lifecycle ---------------------------------------------------

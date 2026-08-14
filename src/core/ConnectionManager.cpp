@@ -43,7 +43,8 @@ bool ConnectionManager::canUseReal() const {
 
 bool ConnectionManager::isDemoMode() const { return preferMock(); }
 
-QString ConnectionManager::addConnection(const QString &uri, const QString &displayName) {
+QString ConnectionManager::addConnection(const QString &uri, const QString &displayName,
+                                         const QString &username, const QString &password) {
     QMutexLocker lock(&m_mutex);
     const QString id = uri;
     if (m_backends.contains(id))
@@ -52,9 +53,11 @@ QString ConnectionManager::addConnection(const QString &uri, const QString &disp
     std::shared_ptr<IHypervisorBackend> backend;
 #ifdef HAVE_LIBVIRT
     if (!preferMock()) {
-        backend = std::make_shared<LibvirtBackend>(id, displayName);
+        backend = std::make_shared<LibvirtBackend>(id, displayName, username, password);
         m_usingReal = true;
     }
+#else
+    Q_UNUSED(username); Q_UNUSED(password);
 #endif
     if (!backend) {
         // Seed sample data only in explicit Demo mode (VMM_BACKEND=mock). A mock
@@ -99,9 +102,15 @@ HostInfo ConnectionManager::hostInfo(const QString &connId) const {
 
 void ConnectionManager::openConnection(const QString &connId) {
     runAsync(connId,
-        [](IHypervisorBackend &b) { b.open(); },
+        [](IHypervisorBackend &b) { if (!b.isOpen()) b.open(); },
         [this, connId] { emit connectionStateChanged(connId, true, {}); },
         [this, connId](const QString &err) { emit connectionStateChanged(connId, false, err); });
+}
+
+void ConnectionManager::closeConnection(const QString &connId) {
+    runAsync(connId,
+        [](IHypervisorBackend &b) { if (b.isOpen()) b.close(); },
+        [this, connId] { emit connectionStateChanged(connId, false, {}); });
 }
 
 void ConnectionManager::runAsync(const QString &connId, Job job,

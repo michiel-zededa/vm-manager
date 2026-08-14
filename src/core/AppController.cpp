@@ -114,11 +114,31 @@ void AppController::bootstrap() {
     emit backendKindChanged();
 }
 
-void AppController::addConnection(const QString &uri, const QString &displayName) {
-    const QString id = m_cm->addConnection(uri, displayName);
+void AppController::addConnection(const QString &uri, const QString &displayName,
+                                  const QString &username, const QString &password) {
+    const QString id = m_cm->addConnection(uri, displayName, username, password);
+    // Show the host immediately (disconnected) so it can be managed even if the
+    // first connect fails.
+    HostInfo h = m_cm->hostInfo(id);
+    h.displayName = displayName;
+    h.connected = false;
+    m_connections->upsert(h);
     if (m_currentConnectionId.isEmpty())
         setCurrentConnectionId(id);
     m_cm->openConnection(id);  // async; onConnectionStateChanged follows
+}
+
+void AppController::connectConnection(const QString &connId) {
+    m_cm->openConnection(connId);
+}
+
+void AppController::disconnectConnection(const QString &connId) {
+    m_cm->closeConnection(connId);
+    m_vms->removeConnection(connId);
+    HostInfo h = m_cm->hostInfo(connId);
+    h.connected = false;
+    h.activeVms = 0;
+    m_connections->upsert(h);
 }
 
 void AppController::removeConnection(const QString &connId) {
@@ -139,8 +159,8 @@ void AppController::onConnectionStateChanged(const QString &connId, bool connect
     if (connected) {
         emit notify(Success, tr("Connected"), h.displayName);
         fullRefresh(connId);
-    } else {
-        emit notify(Error, tr("Connection failed"), error.isEmpty() ? connId : error);
+    } else if (!error.isEmpty()) {
+        emit notify(Error, tr("Connection failed"), error);
     }
 }
 
