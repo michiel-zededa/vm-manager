@@ -1,9 +1,8 @@
 # VM Manager
 
-> A modern, cross-platform virtual-machine manager. Feature parity with
-> [virt-manager](https://github.com/virt-manager/virt-manager), the fluid
-> single-download experience of the Raspberry Pi Imager, and native builds for
-> **macOS, Windows and Linux**.
+> A modern, cross-platform virtual-machine manager with feature parity to
+> [virt-manager](https://github.com/virt-manager/virt-manager), a fluid modern
+> interface, and native builds for **macOS, Windows and Linux**.
 
 VM Manager is a native desktop application built with **Qt 6 / Qt Quick (QML)**
 and **C++**, talking to hypervisors through **libvirt** — locally and over
@@ -14,23 +13,8 @@ SSH/TLS to remote hosts. It targets two audiences at once:
 - **Sysadmins** managing fleets of VMs on remote KVM/QEMU hosts who need
   multi-host connections, bulk actions and robustness.
 
----
-
-## Why another VM manager?
-
-| | virt-manager | UTM | RPi Imager | **VM Manager** |
-|---|:---:|:---:|:---:|:---:|
-| Cross-platform (Mac/Win/Linux) | Linux only | Mac/iOS only | ✅ | ✅ |
-| Modern, fluid UI | ✗ (GTK, dated) | ✅ | ✅ | ✅ (QML) |
-| libvirt (local **+** remote) | ✅ | ✗ | — | ✅ |
-| Cross-format image import | partial | partial | ✗ | ✅ (ova/vmdk/vhdx/vdi/qcow2/raw) |
-| Snapshots **+ scheduler** | manual | manual | ✗ | ✅ |
-| Templates & cloning | ✅ | ✅ | ✗ | ✅ |
-| Curated downloadable-OS gallery | ✗ | ✅ | ✅ | ✅ |
-| Single-file installer per OS | ✗ | ✅ | ✅ | ✅ |
-
-See [`ROADMAP.md`](ROADMAP.md) for the full feature comparison and phased plan,
-and [`ARCHITECTURE.md`](ARCHITECTURE.md) for how it fits together.
+See [`ROADMAP.md`](ROADMAP.md) for the phased plan and
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for how it fits together.
 
 ---
 
@@ -111,8 +95,8 @@ vm-manager/
 2. **The UI is decoupled from libvirt.** Everything speaks to
    `IHypervisorBackend`, so the app runs against a mock on machines without a
    hypervisor and stays testable.
-3. **Progressive disclosure.** Simple by default (RPi-Imager-style), with an
-   *Advanced* path that never hides power from experts (virt-manager-style).
+3. **Progressive disclosure.** Simple by default, with an *Advanced* path that
+   never hides power from experts.
 4. **Native, small, fast.** One self-contained installer per OS, no runtime to
    install.
 

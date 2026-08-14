@@ -18,7 +18,7 @@ ApplicationWindow {
     property var selectedVm: null          // captured row map when opening detail
 
     function openDetail(vm) { selectedVm = vm; currentPage = "detail"; }
-    function goto(page) { currentPage = page; }
+    function navigate(page) { currentPage = page; }
 
     // ---- Toast notifications ----------------------------------------------
     Connections {
@@ -84,22 +84,22 @@ ApplicationWindow {
                     Layout.fillWidth: true; text: qsTr("Dashboard"); glyph: "▦"
                     badgeCount: App.vms.count
                     selected: win.currentPage === "dashboard" || win.currentPage === "detail"
-                    onClicked: win.goto("dashboard")
+                    onClicked: win.navigate("dashboard")
                 }
                 NavItem {
                     Layout.fillWidth: true; text: qsTr("Storage"); glyph: "▤"
                     selected: win.currentPage === "storage"
-                    onClicked: win.goto("storage")
+                    onClicked: win.navigate("storage")
                 }
                 NavItem {
                     Layout.fillWidth: true; text: qsTr("Networks"); glyph: "⇄"
                     selected: win.currentPage === "networks"
-                    onClicked: win.goto("networks")
+                    onClicked: win.navigate("networks")
                 }
                 NavItem {
                     Layout.fillWidth: true; text: qsTr("Snapshots"); glyph: "◷"
                     selected: win.currentPage === "snapshots"
-                    onClicked: win.goto("snapshots")
+                    onClicked: win.navigate("snapshots")
                 }
 
                 // Hosts
@@ -195,7 +195,7 @@ ApplicationWindow {
     }
 
     Component { id: dashboardComp; DashboardView { onOpenVm: (vm) => win.openDetail(vm) } }
-    Component { id: detailComp;    VmDetailView { vm: win.selectedVm; onBack: win.goto("dashboard") } }
+    Component { id: detailComp;    VmDetailView { vm: win.selectedVm; onBack: win.navigate("dashboard") } }
     Component { id: storageComp;   StorageView {} }
     Component { id: networksComp;  NetworkView {} }
     Component { id: snapshotsComp; SnapshotsView {} }
