@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(vm-manager
-    VERSION 0.2.0
+    VERSION 0.2.1
     DESCRIPTION "Modern cross-platform virtual-machine manager"
     HOMEPAGE_URL "https://github.com/michiel-zededa/vm-manager"
     LANGUAGES CXX)
