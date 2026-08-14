@@ -42,7 +42,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.8.2'
+          version: '6.11.1'
           cache: true
 
       # Match the compiler to the MSVC-built Qt on Windows (see ci.yml).
