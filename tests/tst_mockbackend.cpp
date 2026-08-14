@@ -18,7 +18,7 @@ private slots:
 };
 
 void TstMockBackend::opensWithSeedData() {
-    MockBackend b("qemu:///session", "Test");
+    MockBackend b("qemu:///session", "Test", true);
     QVERIFY(!b.isOpen());
     b.open();
     QVERIFY(b.isOpen());
@@ -29,7 +29,7 @@ void TstMockBackend::opensWithSeedData() {
 }
 
 void TstMockBackend::lifecycleTransitions() {
-    MockBackend b("qemu:///session", "Test");
+    MockBackend b("qemu:///session", "Test", true);
     b.open();
     const QString uuid = b.listVms().first().uuid;
 
@@ -47,7 +47,7 @@ void TstMockBackend::lifecycleTransitions() {
 }
 
 void TstMockBackend::defineAndUndefine() {
-    MockBackend b("qemu:///session", "Test");
+    MockBackend b("qemu:///session", "Test", true);
     b.open();
     const int before = b.listVms().size();
 
@@ -65,7 +65,7 @@ void TstMockBackend::defineAndUndefine() {
 }
 
 void TstMockBackend::snapshotRoundTrip() {
-    MockBackend b("qemu:///session", "Test");
+    MockBackend b("qemu:///session", "Test", true);
     b.open();
     const QString uuid = b.listVms().first().uuid;
     QVERIFY(b.listSnapshots(uuid).isEmpty());
@@ -82,7 +82,7 @@ void TstMockBackend::snapshotRoundTrip() {
 }
 
 void TstMockBackend::cloneCreatesIndependentVm() {
-    MockBackend b("qemu:///session", "Test");
+    MockBackend b("qemu:///session", "Test", true);
     b.open();
     const VmInfo src = b.listVms().first();
     const VmInfo clone = b.clone(src.uuid, "clone-of-it", false);
