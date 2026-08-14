@@ -5,6 +5,7 @@
 #include <libvirt/libvirt.h>
 
 #include <QString>
+#include <QHash>
 
 namespace vmm {
 
@@ -70,7 +71,16 @@ private:
     [[noreturn]] static void throwLast(const QString &context);
     virDomainPtr lookup(const QString &uuid);        // caller frees
     VmInfo toVmInfo(virDomainPtr dom);
+    void sampleRates(virDomainPtr dom, VmInfo &v);   // CPU%/disk/net deltas
     QString buildDomainXml(const VmCreateRequest &req, const QString &diskPath);
+
+    // Previous per-domain counters for computing live rates between polls.
+    struct DomSample {
+        qint64 wallMs = 0;
+        unsigned long long cpuNs = 0;
+        unsigned long long rdBytes = 0, wrBytes = 0, rxBytes = 0, txBytes = 0;
+    };
+    QHash<QString, DomSample> m_domSamples;
 
     QString m_uri;
     QString m_displayName;

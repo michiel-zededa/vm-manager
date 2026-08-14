@@ -55,10 +55,28 @@ AppController::AppController(QObject *parent) : QObject(parent) {
     connect(m_cm, &ConnectionManager::connectionStateChanged,
             this, &AppController::onConnectionStateChanged);
 
-    // The scheduler asks us to take a snapshot when a policy fires.
+    // The scheduler asks us to take a snapshot when a policy fires; afterwards
+    // we prune older auto-* snapshots beyond the retention count.
     connect(m_scheduler, &SnapshotScheduler::snapshotDue, this,
-            [this](const QString &connId, const QString &uuid, const QString &name) {
-                takeSnapshot(connId, uuid, name, QStringLiteral("Scheduled snapshot"), false);
+            [this](const QString &connId, const QString &uuid, const QString &name, int retain) {
+                m_cm->runAsync(connId,
+                    [uuid, name, retain](IHypervisorBackend &b) {
+                        b.createSnapshot(uuid, name, QStringLiteral("Scheduled snapshot"), false);
+                        // Keep the newest `retain` auto-* snapshots (names sort by time).
+                        QList<SnapshotInfo> autos;
+                        for (const auto &s : b.listSnapshots(uuid))
+                            if (s.name.startsWith(QLatin1String("auto-")))
+                                autos.push_back(s);
+                        std::sort(autos.begin(), autos.end(),
+                                  [](const SnapshotInfo &a, const SnapshotInfo &c){ return a.name > c.name; });
+                        for (int i = qMax(1, retain); i < autos.size(); ++i)
+                            b.deleteSnapshot(uuid, autos[i].name);
+                    },
+                    [this, connId, uuid, name] {
+                        emit notify(Success, tr("Scheduled snapshot"), name);
+                        loadSnapshots(connId, uuid);
+                    },
+                    [this](const QString &err) { emit notify(Warning, tr("Scheduled snapshot failed"), err); });
             });
 
     m_statsTimer.setInterval(2000);

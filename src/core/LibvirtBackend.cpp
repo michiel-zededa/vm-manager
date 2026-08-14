@@ -3,6 +3,9 @@
 #include <libvirt/virterror.h>
 
 #include <QUuid>
+#include <QDateTime>
+#include <QByteArray>
+#include <QRegularExpression>
 
 namespace vmm {
 
@@ -144,9 +147,59 @@ VmInfo LibvirtBackend::toVmInfo(virDomainPtr dom) {
         v.title = QString::fromUtf8(title);
         free(title);
     }
-    // TODO(phase-1): parse <os> from the domain XML for a friendly osLabel and
-    // compute cpuPercent from virDomainGetCPUStats deltas across polls.
+    sampleRates(dom, v);
     return v;
+}
+
+void LibvirtBackend::sampleRates(virDomainPtr dom, VmInfo &v) {
+    if (v.state != VmState::Running) { m_domSamples.remove(v.uuid); return; }
+
+    virDomainPtr doms[2] = { dom, nullptr };
+    virDomainStatsRecordPtr *records = nullptr;
+    const unsigned int flags = 0;
+    const unsigned int stats = VIR_DOMAIN_STATS_CPU_TOTAL
+                             | VIR_DOMAIN_STATS_BLOCK
+                             | VIR_DOMAIN_STATS_INTERFACE;
+    const int n = virDomainListGetStats(doms, stats, &records, flags);
+    if (n <= 0 || !records) { if (records) virDomainStatsRecordListFree(records); return; }
+
+    unsigned long long cpuNs = 0, rd = 0, wr = 0, rx = 0, tx = 0;
+    virDomainStatsRecordPtr rec = records[0];
+    for (int i = 0; i < rec->nparams; ++i) {
+        const virTypedParameter &p = rec->params[i];
+        unsigned long long val = 0;
+        switch (p.type) {
+        case VIR_TYPED_PARAM_ULLONG: val = p.value.ul; break;
+        case VIR_TYPED_PARAM_UINT:   val = p.value.ui; break;
+        case VIR_TYPED_PARAM_LLONG:  val = static_cast<unsigned long long>(p.value.l); break;
+        case VIR_TYPED_PARAM_INT:    val = static_cast<unsigned long long>(p.value.i); break;
+        default: break;
+        }
+        const QByteArray f(p.field);
+        if (f == "cpu.time") cpuNs = val;
+        else if (f.endsWith(".rd.bytes")) rd += val;
+        else if (f.endsWith(".wr.bytes")) wr += val;
+        else if (f.endsWith(".rx.bytes")) rx += val;
+        else if (f.endsWith(".tx.bytes")) tx += val;
+    }
+    virDomainStatsRecordListFree(records);
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const auto it = m_domSamples.constFind(v.uuid);
+    if (it != m_domSamples.constEnd() && it->wallMs > 0 && now > it->wallMs) {
+        const double dt = (now - it->wallMs) / 1000.0;   // seconds
+        if (dt > 0) {
+            const int vc = qMax(1, v.vcpus);
+            const double dCpu = double(cpuNs) - double(it->cpuNs);
+            v.stats.cpuPercent   = qBound(0.0, (dCpu / (dt * 1e9)) / vc * 100.0, 100.0);
+            v.stats.diskReadBps  = quint64(qMax(0.0, (double(rd) - double(it->rdBytes)) / dt));
+            v.stats.diskWriteBps = quint64(qMax(0.0, (double(wr) - double(it->wrBytes)) / dt));
+            v.stats.netRxBps     = quint64(qMax(0.0, (double(rx) - double(it->rxBytes)) / dt));
+            v.stats.netTxBps     = quint64(qMax(0.0, (double(tx) - double(it->txBytes)) / dt));
+        }
+    }
+    m_domSamples.insert(v.uuid, DomSample{ now, cpuNs, rd, wr, rx, tx });
+    v.stats.timestamp = QDateTime::currentDateTime();
 }
 
 HostInfo LibvirtBackend::hostInfo() {
@@ -389,11 +442,38 @@ VmInfo LibvirtBackend::define(const VmCreateRequest &req) {
 
 void LibvirtBackend::undefine(const QString &uuid, bool removeStorage) {
     virDomainPtr d = lookup(uuid);
+
+    // Optionally delete the domain's disk images first (while it's still defined
+    // so we can read its XML).
+    if (removeStorage) {
+        if (char *xml = virDomainGetXMLDesc(d, 0)) {
+            const QString s = QString::fromUtf8(xml);
+            free(xml);
+            int pos = 0;
+            while (true) {
+                const int di = s.indexOf(QLatin1String("<disk"), pos);
+                if (di < 0) break;
+                const int de = s.indexOf(QLatin1String("</disk>"), di);
+                if (de < 0) break;
+                const QString disk = s.mid(di, de - di);
+                pos = de + 7;
+                if (!disk.contains(QLatin1String("device='disk'")))
+                    continue;                          // skip cdrom/floppy
+                QString path;
+                int a = disk.indexOf(QLatin1String("file='"));
+                if (a >= 0) { const int e = disk.indexOf('\'', a + 6); path = disk.mid(a + 6, e - (a + 6)); }
+                else { a = disk.indexOf(QLatin1String("dev='")); if (a >= 0) { const int e = disk.indexOf('\'', a + 5); path = disk.mid(a + 5, e - (a + 5)); } }
+                if (path.isEmpty()) continue;
+                if (virStorageVolPtr vol = virStorageVolLookupByPath(m_conn, path.toUtf8().constData())) {
+                    virStorageVolDelete(vol, 0);       // best-effort
+                    virStorageVolFree(vol);
+                }
+            }
+        }
+    }
+
     unsigned int flags = VIR_DOMAIN_UNDEFINE_MANAGED_SAVE | VIR_DOMAIN_UNDEFINE_NVRAM
                        | VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA;
-    // TODO(phase-1): when removeStorage, enumerate <disk> volumes and delete
-    // them via virStorageVolDelete before/with undefine.
-    Q_UNUSED(removeStorage);
     const int rc = virDomainUndefineFlags(d, flags);
     virDomainFree(d);
     if (rc < 0) throwLast(QStringLiteral("undefine"));
@@ -410,11 +490,78 @@ void LibvirtBackend::markTemplate(const QString &uuid, bool on) {
     if (rc < 0) throwLast(QStringLiteral("mark template"));
 }
 
-VmInfo LibvirtBackend::clone(const QString &, const QString &, bool) {
-    // Full/linked clone needs storage-volume copy (virStorageVolCreateXMLFrom)
-    // plus XML rewrite of disk paths + MAC/UUID. Scheduled for phase 3.
-    throw BackendError(QStringLiteral("Cloning is not implemented yet (phase 3). "
-                                      "Use the mock backend to preview the flow."));
+VmInfo LibvirtBackend::clone(const QString &uuid, const QString &newName, bool linked) {
+    virDomainPtr src = lookup(uuid);
+    char *xmlc = virDomainGetXMLDesc(src, VIR_DOMAIN_XML_INACTIVE);
+    virDomainFree(src);
+    if (!xmlc) throwLast(QStringLiteral("read source domain"));
+    QString xml = QString::fromUtf8(xmlc);
+    free(xmlc);
+
+    // New name; drop uuid + MACs so libvirt regenerates them.
+    { const int a = xml.indexOf(QLatin1String("<name>")); const int b = xml.indexOf(QLatin1String("</name>"), a);
+      if (a >= 0 && b > a) xml.replace(a + 6, b - (a + 6), newName.toHtmlEscaped()); }
+    { const int a = xml.indexOf(QLatin1String("<uuid>")); const int b = xml.indexOf(QLatin1String("</uuid>"), a);
+      if (a >= 0 && b > a) xml.remove(a, (b + 7) - a); }
+    xml.remove(QRegularExpression(QStringLiteral("\\s*<mac address='[^']*'\\s*/>")));
+
+    // Clone each writable disk's backing volume and repoint the source path.
+    int pos = 0;
+    while (true) {
+        const int di = xml.indexOf(QLatin1String("<disk"), pos); if (di < 0) break;
+        const int de = xml.indexOf(QLatin1String("</disk>"), di); if (de < 0) break;
+        const QString disk = xml.mid(di, de - di);
+        pos = de + 7;
+        if (!disk.contains(QLatin1String("device='disk'"))) continue;
+        const int fa = disk.indexOf(QLatin1String("file='"));
+        if (fa < 0) continue;
+        const int fe = disk.indexOf('\'', fa + 6);
+        const QString srcPath = disk.mid(fa + 6, fe - (fa + 6));
+
+        virStorageVolPtr sv = virStorageVolLookupByPath(m_conn, srcPath.toUtf8().constData());
+        if (!sv) continue;
+        virStoragePoolPtr pool = virStoragePoolLookupByVolume(sv);
+        if (!pool) { virStorageVolFree(sv); continue; }
+
+        quint64 cap = 20ull * 1024 * 1024 * 1024;
+        virStorageVolInfo vi;
+        if (virStorageVolGetInfo(sv, &vi) == 0) cap = vi.capacity;
+        const QString fname = srcPath.section('/', -1);
+        const QString newVolName = newName + QLatin1Char('-') + fname;
+
+        QString volXml;
+        virStorageVolPtr nv = nullptr;
+        if (linked) {
+            volXml = QStringLiteral(
+                "<volume><name>%1</name><capacity>%2</capacity>"
+                "<target><format type='qcow2'/></target>"
+                "<backingStore><path>%3</path><format type='qcow2'/></backingStore></volume>")
+                .arg(newVolName.toHtmlEscaped()).arg(cap).arg(srcPath.toHtmlEscaped());
+            nv = virStorageVolCreateXML(pool, volXml.toUtf8().constData(), 0);
+        } else {
+            volXml = QStringLiteral(
+                "<volume><name>%1</name><capacity>%2</capacity>"
+                "<target><format type='qcow2'/></target></volume>")
+                .arg(newVolName.toHtmlEscaped()).arg(cap);
+            nv = virStorageVolCreateXMLFrom(pool, volXml.toUtf8().constData(), sv, 0);
+        }
+
+        if (nv) {
+            if (char *np = virStorageVolGetPath(nv)) {
+                xml.replace(srcPath, QString::fromUtf8(np));
+                free(np);
+            }
+            virStorageVolFree(nv);
+        }
+        virStoragePoolFree(pool);
+        virStorageVolFree(sv);
+    }
+
+    virDomainPtr nd = virDomainDefineXML(m_conn, xml.toUtf8().constData());
+    if (!nd) throwLast(QStringLiteral("define clone"));
+    VmInfo v = toVmInfo(nd);
+    virDomainFree(nd);
+    return v;
 }
 
 QList<SnapshotInfo> LibvirtBackend::listSnapshots(const QString &uuid) {

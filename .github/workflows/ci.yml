@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [ main, "claude/**" ]
+    # Doc/asset-only changes don't need a full 3-platform build+test.
+    paths-ignore: [ "**.md", "docs/**", "assets/**", "LICENSE", ".gitignore" ]
   pull_request:
     branches: [ main ]
 

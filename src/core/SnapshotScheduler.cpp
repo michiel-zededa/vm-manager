@@ -67,7 +67,7 @@ void SnapshotScheduler::tick() {
         if (!s.enabled || s.nextRun > now)
             continue;
         const QString name = QStringLiteral("auto-%1").arg(now.toString("yyyyMMdd-HHmmss"));
-        emit snapshotDue(s.connId, s.uuid, name);
+        emit snapshotDue(s.connId, s.uuid, name, s.retain);
         s.nextRun = now.addSecs(s.intervalMinutes * 60);
         dirty = true;
     }

@@ -35,9 +35,10 @@ public:
     Q_INVOKABLE QVariantList schedules() const;
 
 signals:
-    // Emitted when a schedule is due. AppController performs the snapshot and
-    // applies the retention policy.
-    void snapshotDue(const QString &connId, const QString &uuid, const QString &snapshotName);
+    // Emitted when a schedule is due. AppController takes the snapshot and
+    // prunes older `auto-*` snapshots beyond `retain`.
+    void snapshotDue(const QString &connId, const QString &uuid,
+                     const QString &snapshotName, int retain);
     void schedulesChanged();
 
 private:
