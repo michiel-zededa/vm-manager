@@ -9,6 +9,9 @@
 
 #include <QProcessEnvironment>
 #include <QCoreApplication>
+#include <QStandardPaths>
+#include <QFileInfo>
+#include <QUrl>
 #include <memory>
 
 namespace vmm {
@@ -306,6 +309,117 @@ void AppController::loadStorage(const QString &connId) {
                     {"allocationBytes", QVariant::fromValue(p.allocationBytes)}});
             emit storageLoaded(connId, out);
         });
+}
+
+void AppController::loadVolumes(const QString &connId, const QString &poolName) {
+    auto vols = std::make_shared<QList<VolumeInfo>>();
+    m_cm->runAsync(connId,
+        [poolName, vols](IHypervisorBackend &b){ *vols = b.listVolumes(poolName); },
+        [this, connId, poolName, vols] {
+            QVariantList out;
+            for (const auto &v : *vols)
+                out.push_back(QVariantMap{
+                    {"name", v.name}, {"path", v.path}, {"format", v.format},
+                    {"capacityBytes", QVariant::fromValue(v.capacityBytes)},
+                    {"allocationBytes", QVariant::fromValue(v.allocationBytes)}});
+            emit volumesLoaded(connId, poolName, out);
+        },
+        [this](const QString &err){ emit notify(Warning, tr("Load volumes failed"), err); });
+}
+
+void AppController::createStoragePool(const QString &connId, const QString &name,
+                                      const QString &type, const QString &path) {
+    m_cm->runAsync(connId,
+        [name, type, path](IHypervisorBackend &b){ b.createStoragePool(name, type, path); },
+        [this, connId, name] {
+            emit notify(Success, tr("Pool created"), name);
+            loadStorage(connId);
+        },
+        [this](const QString &err){ emit notify(Error, tr("Create pool failed"), err); });
+}
+
+void AppController::deleteStoragePool(const QString &connId, const QString &name, bool deleteContents) {
+    m_cm->runAsync(connId,
+        [name, deleteContents](IHypervisorBackend &b){ b.deleteStoragePool(name, deleteContents); },
+        [this, connId, name] {
+            emit notify(Success, tr("Pool deleted"), name);
+            loadStorage(connId);
+        },
+        [this](const QString &err){ emit notify(Error, tr("Delete pool failed"), err); });
+}
+
+void AppController::setStoragePoolActive(const QString &connId, const QString &name, bool active) {
+    m_cm->runAsync(connId,
+        [name, active](IHypervisorBackend &b){ b.setStoragePoolActive(name, active); },
+        [this, connId] { loadStorage(connId); },
+        [this](const QString &err){ emit notify(Error, tr("Pool state change failed"), err); });
+}
+
+void AppController::createVolume(const QString &connId, const QString &poolName,
+                                 const QString &name, const QString &format, double capacityGiB) {
+    const quint64 bytes = quint64(capacityGiB * 1024.0 * 1024.0 * 1024.0);
+    m_cm->runAsync(connId,
+        [poolName, name, format, bytes](IHypervisorBackend &b){ b.createVolume(poolName, name, format, bytes); },
+        [this, connId, poolName, name] {
+            emit notify(Success, tr("Volume created"), name);
+            loadVolumes(connId, poolName);
+            loadStorage(connId);
+        },
+        [this](const QString &err){ emit notify(Error, tr("Create volume failed"), err); });
+}
+
+void AppController::deleteVolume(const QString &connId, const QString &poolName, const QString &volumeName) {
+    m_cm->runAsync(connId,
+        [poolName, volumeName](IHypervisorBackend &b){ b.deleteVolume(poolName, volumeName); },
+        [this, connId, poolName, volumeName] {
+            emit notify(Success, tr("Volume deleted"), volumeName);
+            loadVolumes(connId, poolName);
+            loadStorage(connId);
+        },
+        [this](const QString &err){ emit notify(Error, tr("Delete volume failed"), err); });
+}
+
+QString AppController::buildConnectionUri(const QString &transport, const QString &host,
+                                          const QString &user, int port, const QString &path) const {
+    const QString p = path.isEmpty() ? QStringLiteral("system") : path;
+    if (transport == QStringLiteral("qemu:///session") || transport == QStringLiteral("qemu:///system"))
+        return transport;
+    // e.g. qemu+ssh://user@host:port/system
+    QString uri = QStringLiteral("qemu+%1://").arg(transport);
+    if (!user.isEmpty())
+        uri += QUrl::toPercentEncoding(user) + QLatin1Char('@');
+    uri += host;
+    if (port > 0)
+        uri += QStringLiteral(":%1").arg(port);
+    uri += QLatin1Char('/') + p;
+    return uri;
+}
+
+QVariantMap AppController::dependencyStatus() const {
+    const auto has = [](const QString &exe) {
+        return !QStandardPaths::findExecutable(exe).isEmpty();
+    };
+    QVariantMap m;
+    m["qemuImg"]  = has(QStringLiteral("qemu-img"));
+    m["qemu"]     = has(QStringLiteral("qemu-system-x86_64")) || has(QStringLiteral("qemu-system-aarch64"));
+    m["libvirt"]  = has(QStringLiteral("virsh")) || has(QStringLiteral("libvirtd"));
+    m["usingMock"] = usingMockBackend();
+    return m;
+}
+
+QString AppController::installHint(const QString &what) const {
+#if defined(Q_OS_MACOS)
+    if (what == QStringLiteral("qemu"))    return QStringLiteral("brew install qemu");
+    if (what == QStringLiteral("libvirt")) return QStringLiteral("brew install libvirt && brew services start libvirt");
+    return QStringLiteral("brew install qemu libvirt");
+#elif defined(Q_OS_WIN)
+    return QStringLiteral("Local virtualization on Windows is not supported yet; "
+                          "connect to a remote host over qemu+ssh:// instead.");
+#else
+    if (what == QStringLiteral("qemu"))    return QStringLiteral("sudo apt install qemu-utils qemu-system-x86 || sudo dnf install qemu-img qemu-kvm");
+    if (what == QStringLiteral("libvirt")) return QStringLiteral("sudo apt install libvirt-daemon-system && sudo systemctl enable --now libvirtd");
+    return QStringLiteral("sudo apt install qemu-system-x86 qemu-utils libvirt-daemon-system");
+#endif
 }
 
 void AppController::loadNetworks(const QString &connId) {

@@ -65,6 +65,17 @@ public:
     virtual QList<VolumeInfo> listVolumes(const QString &poolName) = 0;
     virtual QList<NetworkInfo> listNetworks() = 0;
 
+    // Storage management. `type` is a libvirt pool type ("dir", "logical", …);
+    // for "dir" pools `path` is the host directory to adopt/create.
+    virtual StoragePoolInfo createStoragePool(const QString &name, const QString &type,
+                                              const QString &path) = 0;
+    virtual void deleteStoragePool(const QString &name, bool deleteContents) = 0;
+    virtual void setStoragePoolActive(const QString &name, bool active) = 0;
+    // Create a new empty volume of `capacityBytes` in `poolName` (format qcow2/raw).
+    virtual VolumeInfo createVolume(const QString &poolName, const QString &name,
+                                    const QString &format, quint64 capacityBytes) = 0;
+    virtual void deleteVolume(const QString &poolName, const QString &volumeName) = 0;
+
     // Import a prepared (already-converted) qcow2/raw volume + metadata as a VM.
     // Format conversion itself is handled by ImageImporter before this call.
     virtual VmInfo importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) = 0;

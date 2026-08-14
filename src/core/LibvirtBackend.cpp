@@ -425,6 +425,87 @@ QList<VolumeInfo> LibvirtBackend::listVolumes(const QString &poolName) {
     return out;
 }
 
+StoragePoolInfo LibvirtBackend::createStoragePool(const QString &name, const QString &type,
+                                                  const QString &path) {
+    const QString t = type.isEmpty() ? QStringLiteral("dir") : type;
+    const QString xml = QStringLiteral(
+        "<pool type='%1'>\n"
+        "  <name>%2</name>\n"
+        "  <target><path>%3</path></target>\n"
+        "</pool>\n").arg(t, name.toHtmlEscaped(), path.toHtmlEscaped());
+    virStoragePoolPtr pool = virStoragePoolDefineXML(m_conn, xml.toUtf8().constData(), 0);
+    if (!pool) throwLast(QStringLiteral("define pool %1").arg(name));
+    // Build the target dir (harmless if it exists), autostart, and start it.
+    virStoragePoolBuild(pool, 0);
+    virStoragePoolSetAutostart(pool, 1);
+    virStoragePoolCreate(pool, 0);
+    StoragePoolInfo p;
+    p.name = name;
+    p.type = t;
+    virStoragePoolInfo info;
+    if (virStoragePoolGetInfo(pool, &info) == 0) {
+        p.active = info.state == VIR_STORAGE_POOL_RUNNING;
+        p.capacityBytes = info.capacity;
+        p.allocationBytes = info.allocation;
+    }
+    virStoragePoolFree(pool);
+    return p;
+}
+
+void LibvirtBackend::deleteStoragePool(const QString &name, bool deleteContents) {
+    virStoragePoolPtr pool = virStoragePoolLookupByName(m_conn, name.toUtf8().constData());
+    if (!pool) throwLast(QStringLiteral("find pool %1").arg(name));
+    if (deleteContents)
+        virStoragePoolDelete(pool, VIR_STORAGE_POOL_DELETE_NORMAL);
+    virStoragePoolDestroy(pool);          // stop if running (ignore failure)
+    const int rc = virStoragePoolUndefine(pool);
+    virStoragePoolFree(pool);
+    if (rc < 0) throwLast(QStringLiteral("undefine pool %1").arg(name));
+}
+
+void LibvirtBackend::setStoragePoolActive(const QString &name, bool active) {
+    virStoragePoolPtr pool = virStoragePoolLookupByName(m_conn, name.toUtf8().constData());
+    if (!pool) throwLast(QStringLiteral("find pool %1").arg(name));
+    const int rc = active ? virStoragePoolCreate(pool, 0) : virStoragePoolDestroy(pool);
+    virStoragePoolFree(pool);
+    if (rc < 0) throwLast(active ? QStringLiteral("start pool") : QStringLiteral("stop pool"));
+}
+
+VolumeInfo LibvirtBackend::createVolume(const QString &poolName, const QString &name,
+                                        const QString &format, quint64 capacityBytes) {
+    virStoragePoolPtr pool = virStoragePoolLookupByName(m_conn, poolName.toUtf8().constData());
+    if (!pool) throwLast(QStringLiteral("find pool %1").arg(poolName));
+    const QString fmt = format.isEmpty() ? QStringLiteral("qcow2") : format;
+    const QString fname = name.contains('.') ? name : (name + "." + fmt);
+    const QString xml = QStringLiteral(
+        "<volume>\n"
+        "  <name>%1</name>\n"
+        "  <capacity unit='bytes'>%2</capacity>\n"
+        "  <target><format type='%3'/></target>\n"
+        "</volume>\n").arg(fname.toHtmlEscaped()).arg(capacityBytes).arg(fmt);
+    virStorageVolPtr vol = virStorageVolCreateXML(pool, xml.toUtf8().constData(), 0);
+    virStoragePoolFree(pool);
+    if (!vol) throwLast(QStringLiteral("create volume %1").arg(fname));
+    VolumeInfo v;
+    v.name = fname;
+    v.format = fmt;
+    v.capacityBytes = capacityBytes;
+    if (char *path = virStorageVolGetPath(vol)) { v.path = QString::fromUtf8(path); free(path); }
+    virStorageVolFree(vol);
+    return v;
+}
+
+void LibvirtBackend::deleteVolume(const QString &poolName, const QString &volumeName) {
+    virStoragePoolPtr pool = virStoragePoolLookupByName(m_conn, poolName.toUtf8().constData());
+    if (!pool) throwLast(QStringLiteral("find pool %1").arg(poolName));
+    virStorageVolPtr vol = virStorageVolLookupByName(pool, volumeName.toUtf8().constData());
+    virStoragePoolFree(pool);
+    if (!vol) throwLast(QStringLiteral("find volume %1").arg(volumeName));
+    const int rc = virStorageVolDelete(vol, 0);
+    virStorageVolFree(vol);
+    if (rc < 0) throwLast(QStringLiteral("delete volume %1").arg(volumeName));
+}
+
 QList<NetworkInfo> LibvirtBackend::listNetworks() {
     QList<NetworkInfo> out;
     virNetworkPtr *nets = nullptr;

@@ -50,6 +50,19 @@ void MockBackend::open() {
         {"default",  "dir", 512ull*1024*1024*1024, 210ull*1024*1024*1024, true},
         {"fast-nvme","dir", 1024ull*1024*1024*1024, 640ull*1024*1024*1024, true},
     };
+    const auto vol = [](const QString &n, const QString &dir, quint64 capG, quint64 allocG) {
+        return VolumeInfo{n, dir + "/" + n, "qcow2",
+                          capG*1024*1024*1024, allocG*1024*1024*1024};
+    };
+    m_volumes["default"] = {
+        vol("ubuntu-dev.qcow2",    "/var/lib/libvirt/images", 40, 12),
+        vol("win11-test.qcow2",    "/var/lib/libvirt/images", 80, 41),
+        vol("debian-router.qcow2", "/var/lib/libvirt/images", 20, 4),
+    };
+    m_volumes["fast-nvme"] = {
+        vol("fedora-build.qcow2", "/mnt/nvme/images", 120, 96),
+        vol("k3s-node-1.qcow2",   "/mnt/nvme/images", 40, 18),
+    };
     m_networks = {
         {"default", "nat",    "virbr0", true,  "eth0"},
         {"isolated","isolated","virbr1", true,  {}},
@@ -209,18 +222,64 @@ QList<StoragePoolInfo> MockBackend::listStoragePools() { QMutexLocker l(&m_mutex
 
 QList<VolumeInfo> MockBackend::listVolumes(const QString &poolName) {
     QMutexLocker lock(&m_mutex);
-    if (!m_volumes.contains(poolName)) {
-        QList<VolumeInfo> vols;
-        for (const auto &v : m_vms)
-            vols.push_back({v.name + ".qcow2",
-                            "/var/lib/libvirt/images/" + v.name + ".qcow2",
-                            "qcow2", gib(20), gib(6)});
-        m_volumes.insert(poolName, vols);
-    }
     return m_volumes.value(poolName);
 }
 
 QList<NetworkInfo> MockBackend::listNetworks() { QMutexLocker l(&m_mutex); return m_networks; }
+
+StoragePoolInfo MockBackend::createStoragePool(const QString &name, const QString &type,
+                                               const QString &path) {
+    QMutexLocker lock(&m_mutex);
+    for (const auto &p : m_pools)
+        if (p.name == name)
+            throw BackendError(QStringLiteral("A pool named '%1' already exists").arg(name));
+    StoragePoolInfo p;
+    p.name = name;
+    p.type = type.isEmpty() ? QStringLiteral("dir") : type;
+    p.capacityBytes = 512ull*1024*1024*1024;
+    p.allocationBytes = 0;
+    p.active = true;
+    Q_UNUSED(path);
+    m_pools.push_back(p);
+    m_volumes.insert(name, {});
+    return p;
+}
+
+void MockBackend::deleteStoragePool(const QString &name, bool) {
+    QMutexLocker lock(&m_mutex);
+    m_pools.erase(std::remove_if(m_pools.begin(), m_pools.end(),
+        [&](const StoragePoolInfo &p){ return p.name == name; }), m_pools.end());
+    m_volumes.remove(name);
+}
+
+void MockBackend::setStoragePoolActive(const QString &name, bool active) {
+    QMutexLocker lock(&m_mutex);
+    for (auto &p : m_pools)
+        if (p.name == name) p.active = active;
+}
+
+VolumeInfo MockBackend::createVolume(const QString &poolName, const QString &name,
+                                     const QString &format, quint64 capacityBytes) {
+    QMutexLocker lock(&m_mutex);
+    bool found = false;
+    QString dir = QStringLiteral("/var/lib/libvirt/images");
+    for (auto &p : m_pools)
+        if (p.name == poolName) { found = true; p.allocationBytes += capacityBytes / 10; }
+    if (!found)
+        throw BackendError(QStringLiteral("No such pool: %1").arg(poolName));
+    const QString fmt = format.isEmpty() ? QStringLiteral("qcow2") : format;
+    const QString fname = name.contains('.') ? name : (name + "." + fmt);
+    VolumeInfo v{fname, dir + "/" + fname, fmt, capacityBytes, capacityBytes / 20};
+    m_volumes[poolName].push_back(v);
+    return v;
+}
+
+void MockBackend::deleteVolume(const QString &poolName, const QString &volumeName) {
+    QMutexLocker lock(&m_mutex);
+    auto &vols = m_volumes[poolName];
+    vols.erase(std::remove_if(vols.begin(), vols.end(),
+        [&](const VolumeInfo &v){ return v.name == volumeName; }), vols.end());
+}
 
 VmInfo MockBackend::importPreparedDisk(const QString &, const VmCreateRequest &req) {
     return define(req);

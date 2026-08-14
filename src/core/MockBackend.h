@@ -48,6 +48,14 @@ public:
     QList<VolumeInfo> listVolumes(const QString &poolName) override;
     QList<NetworkInfo> listNetworks() override;
 
+    StoragePoolInfo createStoragePool(const QString &name, const QString &type,
+                                      const QString &path) override;
+    void deleteStoragePool(const QString &name, bool deleteContents) override;
+    void setStoragePoolActive(const QString &name, bool active) override;
+    VolumeInfo createVolume(const QString &poolName, const QString &name,
+                            const QString &format, quint64 capacityBytes) override;
+    void deleteVolume(const QString &poolName, const QString &volumeName) override;
+
     VmInfo importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) override;
 
 private:

@@ -87,6 +87,24 @@ public:
     // ---- Enumerations for storage/network views -------------------------
     Q_INVOKABLE void loadStorage(const QString &connId);   // -> storageLoaded
     Q_INVOKABLE void loadNetworks(const QString &connId);  // -> networksLoaded
+    Q_INVOKABLE void loadVolumes(const QString &connId, const QString &poolName); // -> volumesLoaded
+
+    // ---- Storage management ---------------------------------------------
+    Q_INVOKABLE void createStoragePool(const QString &connId, const QString &name,
+                                       const QString &type, const QString &path);
+    Q_INVOKABLE void deleteStoragePool(const QString &connId, const QString &name, bool deleteContents);
+    Q_INVOKABLE void setStoragePoolActive(const QString &connId, const QString &name, bool active);
+    Q_INVOKABLE void createVolume(const QString &connId, const QString &poolName,
+                                  const QString &name, const QString &format, double capacityGiB);
+    Q_INVOKABLE void deleteVolume(const QString &connId, const QString &poolName, const QString &volumeName);
+
+    // ---- Connections helper (build a URI from parts) --------------------
+    Q_INVOKABLE QString buildConnectionUri(const QString &transport, const QString &host,
+                                           const QString &user, int port, const QString &path) const;
+
+    // ---- Dependency / environment checks --------------------------------
+    Q_INVOKABLE QVariantMap dependencyStatus() const;
+    Q_INVOKABLE QString installHint(const QString &what) const;
 
 signals:
     void currentConnectionChanged();
@@ -95,6 +113,7 @@ signals:
     void vmActionCompleted(const QString &uuid, const QString &action);
     void snapshotsLoaded(const QString &uuid, const QVariantList &snapshots);
     void storageLoaded(const QString &connId, const QVariantList &pools);
+    void volumesLoaded(const QString &connId, const QString &poolName, const QVariantList &volumes);
     void networksLoaded(const QString &connId, const QVariantList &networks);
 
 private:
