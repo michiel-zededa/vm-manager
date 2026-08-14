@@ -33,6 +33,16 @@ bool ConnectionManager::preferMock() {
     return env.value("VMM_BACKEND").compare("mock", Qt::CaseInsensitive) == 0;
 }
 
+bool ConnectionManager::canUseReal() const {
+#ifdef HAVE_LIBVIRT
+    return !preferMock();
+#else
+    return false;
+#endif
+}
+
+bool ConnectionManager::isDemoMode() const { return preferMock(); }
+
 QString ConnectionManager::addConnection(const QString &uri, const QString &displayName) {
     QMutexLocker lock(&m_mutex);
     const QString id = uri;
@@ -46,8 +56,11 @@ QString ConnectionManager::addConnection(const QString &uri, const QString &disp
         m_usingReal = true;
     }
 #endif
-    if (!backend)
-        backend = std::make_shared<MockBackend>(id, displayName);
+    if (!backend) {
+        // Seed sample data only in explicit Demo mode (VMM_BACKEND=mock). A mock
+        // used purely as a libvirt fallback starts empty.
+        backend = std::make_shared<MockBackend>(id, displayName, preferMock());
+    }
 
     m_backends.insert(id, backend);
     return id;

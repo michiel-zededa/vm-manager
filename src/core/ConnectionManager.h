@@ -45,6 +45,10 @@ public:
 
     // True when at least one real (libvirt) backend was created.
     bool usingRealBackend() const { return m_usingReal; }
+    // True when a real libvirt backend can be created (compiled in, not forced to mock).
+    bool canUseReal() const;
+    // Explicit Demo mode (VMM_BACKEND=mock) — seeds sample data.
+    bool isDemoMode() const;
 
 signals:
     void connectionStateChanged(const QString &connId, bool connected, const QString &error);

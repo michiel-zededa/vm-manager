@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <QStandardPaths>
 #include <QFileInfo>
+#include <QDir>
 #include <QUrl>
 #include <memory>
 
@@ -74,6 +75,10 @@ bool AppController::usingMockBackend() const {
     return !m_cm->usingRealBackend();
 }
 
+bool AppController::demoMode() const {
+    return m_cm->isDemoMode();
+}
+
 void AppController::setCurrentConnectionId(const QString &id) {
     if (m_currentConnectionId == id)
         return;
@@ -83,24 +88,21 @@ void AppController::setCurrentConnectionId(const QString &id) {
 
 void AppController::bootstrap() {
     const auto env = QProcessEnvironment::systemEnvironment();
+    const QString override = env.value("VMM_CONNECT").trimmed();
 
-    // Default local connection. On Linux/macOS a session URI works without root;
-    // sysadmins typically want system. We add session and let the user add more.
-    const QString localUri = env.value("VMM_CONNECT",
-#if defined(Q_OS_WIN)
-        QStringLiteral("qemu+ssh://")  // Windows has no local libvirt path yet
-#else
-        QStringLiteral("qemu:///session")
-#endif
-    );
-
-    if (!localUri.trimmed().isEmpty() && localUri != QStringLiteral("qemu+ssh://")) {
-        addConnection(localUri, usingMockBackend() ? QStringLiteral("Demo host (mock)")
-                                                   : QStringLiteral("Local"));
-    } else {
-        // No sensible local default (e.g. Windows): still show a mock demo host
-        // so the app is never empty on first run.
+    if (m_cm->isDemoMode()) {
+        // Explicit Demo mode: a single seeded mock host.
         addConnection(QStringLiteral("mock:///demo"), QStringLiteral("Demo host (mock)"));
+    } else if (!override.isEmpty()) {
+        addConnection(override, override);
+    } else {
+#if !defined(Q_OS_WIN)
+        // Local libvirt session works without root on Linux/macOS. On a build
+        // without libvirt this is an empty mock — the UI explains why. Windows
+        // has no local hypervisor, so we start with no connection and let the
+        // user add a remote one.
+        addConnection(QStringLiteral("qemu:///session"), QStringLiteral("Local"));
+#endif
     }
 
     if (m_currentConnectionId.isEmpty() && !m_cm->connectionIds().isEmpty())
@@ -396,8 +398,25 @@ QString AppController::buildConnectionUri(const QString &transport, const QStrin
 }
 
 QVariantMap AppController::dependencyStatus() const {
-    const auto has = [](const QString &exe) {
-        return !QStandardPaths::findExecutable(exe).isEmpty();
+    // GUI apps launched from Finder/Explorer don't inherit the shell PATH, so a
+    // Homebrew-installed qemu/libvirt would look "missing". Search the usual
+    // install locations in addition to PATH.
+    QStringList paths = QProcessEnvironment::systemEnvironment()
+                            .value(QStringLiteral("PATH"))
+                            .split(QDir::listSeparator(), Qt::SkipEmptyParts);
+    const QStringList extra = {
+        QStringLiteral("/opt/homebrew/bin"), QStringLiteral("/opt/homebrew/sbin"),
+        QStringLiteral("/usr/local/bin"), QStringLiteral("/usr/local/sbin"),
+        QStringLiteral("/opt/homebrew/opt/libvirt/sbin"),
+        QStringLiteral("/usr/local/opt/libvirt/sbin"),
+        QStringLiteral("/usr/bin"), QStringLiteral("/usr/sbin"),
+        QStringLiteral("/bin"), QStringLiteral("/sbin"),
+    };
+    for (const QString &p : extra)
+        if (!paths.contains(p)) paths << p;
+
+    const auto has = [&](const QString &exe) {
+        return !QStandardPaths::findExecutable(exe, paths).isEmpty();
     };
     QVariantMap m;
     m["qemuImg"]  = has(QStringLiteral("qemu-img"));

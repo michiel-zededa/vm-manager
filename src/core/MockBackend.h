@@ -13,7 +13,10 @@ namespace vmm {
 // demoed and UI-tested on any machine — including a fresh Mac.
 class MockBackend final : public IHypervisorBackend {
 public:
-    explicit MockBackend(QString connectionId, QString displayName);
+    // `demo` seeds believable sample VMs/pools/networks (Demo mode). When false
+    // the backend starts empty — used only as a graceful fallback when libvirt
+    // is unavailable, so no fake data is ever mistaken for real machines.
+    explicit MockBackend(QString connectionId, QString displayName, bool demo = false);
 
     HostInfo hostInfo() override;
     void open() override;
@@ -65,6 +68,7 @@ private:
     mutable QMutex m_mutex;
     QString m_connectionId;
     QString m_displayName;
+    bool m_demo = false;
     bool m_open = false;
 
     QHash<QString, VmInfo> m_vms;                        // uuid -> vm

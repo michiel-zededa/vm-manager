@@ -27,6 +27,7 @@ class AppController : public QObject {
     Q_PROPERTY(SnapshotScheduler *scheduler READ scheduler CONSTANT)
     Q_PROPERTY(QString currentConnectionId READ currentConnectionId WRITE setCurrentConnectionId NOTIFY currentConnectionChanged)
     Q_PROPERTY(bool usingMockBackend READ usingMockBackend NOTIFY backendKindChanged)
+    Q_PROPERTY(bool demoMode READ demoMode NOTIFY backendKindChanged)
     Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
 
 public:
@@ -41,6 +42,7 @@ public:
     QString currentConnectionId() const { return m_currentConnectionId; }
     void setCurrentConnectionId(const QString &id);
     bool usingMockBackend() const;
+    bool demoMode() const;
     QString appVersion() const;
 
     // Called once at startup: add the local connection (or a mock host) and

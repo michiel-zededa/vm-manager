@@ -27,12 +27,18 @@ VmInfo makeVm(const QString &conn, const QString &name, const QString &os,
 }
 } // namespace
 
-MockBackend::MockBackend(QString connectionId, QString displayName)
-    : m_connectionId(std::move(connectionId)), m_displayName(std::move(displayName)) {}
+MockBackend::MockBackend(QString connectionId, QString displayName, bool demo)
+    : m_connectionId(std::move(connectionId)), m_displayName(std::move(displayName)),
+      m_demo(demo) {}
 
 void MockBackend::open() {
     QMutexLocker lock(&m_mutex);
     if (m_open)
+        return;
+    m_open = true;
+
+    // Non-demo mock (a libvirt fallback) stays empty — never fabricate VMs.
+    if (!m_demo)
         return;
 
     const auto add = [&](VmInfo v) { m_vms.insert(v.uuid, v); };
@@ -68,7 +74,6 @@ void MockBackend::open() {
         {"isolated","isolated","virbr1", true,  {}},
         {"lab-br0", "bridge", "br0",    true,  "eno1"},
     };
-    m_open = true;
 }
 
 void MockBackend::close() { QMutexLocker lock(&m_mutex); m_open = false; }
