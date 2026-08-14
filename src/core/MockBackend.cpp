@@ -94,6 +94,12 @@ HostInfo MockBackend::hostInfo() {
     h.hostCpus = 16;
     h.hostMemoryKiB = gib(64);
     h.hostMemUsedKiB = gib(21);
+    std::uniform_real_distribution<double> cpu(8.0, 55.0);
+    h.hostCpuPercent = cpu(m_rng);
+    for (const auto &p : m_pools) {
+        h.storageCapacityBytes += p.capacityBytes;
+        h.storageAllocationBytes += p.allocationBytes;
+    }
     h.totalVms = m_vms.size();
     h.activeVms = std::count_if(m_vms.cbegin(), m_vms.cend(),
         [](const VmInfo &v){ return v.state == VmState::Running; });

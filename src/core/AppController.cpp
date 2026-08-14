@@ -13,6 +13,8 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QUrl>
+#include <QUrlQuery>
+#include <QProcess>
 #include <QDesktopServices>
 #include <memory>
 
@@ -316,7 +318,7 @@ void AppController::openConsoleExternally(const QString &connId, const QString &
     auto info = std::make_shared<ConsoleInfo>();
     m_cm->runAsync(connId,
         [uuid, info](IHypervisorBackend &b){ *info = b.consoleInfo(uuid); },
-        [this, info] {
+        [this, connId, info] {
             if (!info->running) { emit notify(Warning, tr("Console"), tr("The VM is not running.")); return; }
             if (info->port <= 0 || info->graphicsType.isEmpty()) {
                 emit notify(Warning, tr("Console"), tr("No graphical console is configured for this VM."));
@@ -324,11 +326,58 @@ void AppController::openConsoleExternally(const QString &connId, const QString &
             }
             const QString scheme = info->graphicsType == QLatin1String("spice") ? QStringLiteral("spice")
                                                                                 : QStringLiteral("vnc");
-            const QUrl url(QStringLiteral("%1://%2:%3").arg(scheme, info->host).arg(info->port));
-            if (!QDesktopServices::openUrl(url))
-                emit notify(Warning, tr("Console"), tr("Copy this address into a viewer: %1").arg(url.toString()));
-            else
-                emit notify(Info, tr("Opening console"), url.toString());
+            const QUrl curi(connId);
+
+            // Local hypervisor: the endpoint is reachable directly.
+            if (!curi.scheme().startsWith(QLatin1String("qemu+"))) {
+                const QUrl url(QStringLiteral("%1://%2:%3").arg(scheme, info->host).arg(info->port));
+                if (!QDesktopServices::openUrl(url))
+                    emit notify(Warning, tr("Console"), tr("Open this address in a viewer: %1").arg(url.toString()));
+                else
+                    emit notify(Info, tr("Opening console"), url.toString());
+                return;
+            }
+
+            // Remote host: the graphics port listens on the remote's loopback,
+            // so it must be reached through an SSH tunnel.
+            const QString transport = curi.scheme().mid(5); // strip "qemu+"
+            const QString host = curi.host();
+            const QString user = curi.userName();
+            const int sshPort = curi.port() > 0 ? curi.port() : 22;
+            const QUrlQuery q(curi.query());
+            const QString keyfile = q.queryItemValue(QStringLiteral("keyfile"));
+            const int localPort = 15900 + (info->port % 1000);
+            const QString userHost = user.isEmpty() ? host : (user + "@" + host);
+            const QUrl viewUrl(QStringLiteral("%1://127.0.0.1:%2").arg(scheme).arg(localPort));
+
+            // Password (libssh2) connections can't drive OpenSSH non-interactively;
+            // hand over the exact tunnel command instead of failing silently.
+            if (transport == QLatin1String("libssh2")) {
+                emit notify(Warning, tr("Console needs an SSH tunnel"),
+                    tr("Run:  ssh -N -L %1:127.0.0.1:%2 %3 -p %4   then open %5")
+                        .arg(localPort).arg(info->port).arg(userHost).arg(sshPort).arg(viewUrl.toString()));
+                return;
+            }
+
+            // Key/agent (ssh transport): open the tunnel for the user.
+            QStringList args{ "-f", "-N",
+                "-o", "ExitOnForwardFailure=yes",
+                "-o", "StrictHostKeyChecking=accept-new",
+                "-L", QStringLiteral("%1:127.0.0.1:%2").arg(localPort).arg(info->port) };
+            if (sshPort != 22) args << "-p" << QString::number(sshPort);
+            if (!keyfile.isEmpty()) args << "-i" << keyfile;
+            args << userHost;
+            if (!QProcess::startDetached(QStringLiteral("ssh"), args)) {
+                emit notify(Error, tr("Console"), tr("Could not start the SSH tunnel (ssh not found?)."));
+                return;
+            }
+            // Give the forward a moment to establish, then launch the viewer.
+            QTimer::singleShot(1000, this, [this, viewUrl] {
+                if (QDesktopServices::openUrl(viewUrl))
+                    emit notify(Info, tr("Opening console"), viewUrl.toString());
+                else
+                    emit notify(Warning, tr("Console"), tr("Tunnel up — open %1 in a viewer.").arg(viewUrl.toString()));
+            });
         },
         [this](const QString &err){ emit notify(Error, tr("Console failed"), err); });
 }

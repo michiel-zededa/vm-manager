@@ -61,6 +61,9 @@ struct HostInfo {
     quint64 hostMemoryKiB = 0;
     quint64 hostMemUsedKiB = 0;
     int hostCpus = 0;
+    double hostCpuPercent = 0.0;          // host-wide CPU utilisation (0..100)
+    quint64 storageCapacityBytes = 0;     // sum of all storage pools
+    quint64 storageAllocationBytes = 0;
     QString lastError;
 };
 

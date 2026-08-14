@@ -62,8 +62,11 @@ QVariantMap ConnectionModel::hostMap(const QString &id) const {
         {"hypervisor", h.hypervisor}, {"hostArch", h.hostArch},
         {"activeVms", h.activeVms}, {"totalVms", h.totalVms},
         {"hostCpus", h.hostCpus},
+        {"hostCpuPercent", h.hostCpuPercent},
         {"hostMemoryKiB", QVariant::fromValue(h.hostMemoryKiB)},
         {"hostMemUsedKiB", QVariant::fromValue(h.hostMemUsedKiB)},
+        {"storageCapacityBytes", QVariant::fromValue(h.storageCapacityBytes)},
+        {"storageAllocationBytes", QVariant::fromValue(h.storageAllocationBytes)},
         {"lastError", h.lastError},
     };
 }

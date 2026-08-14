@@ -77,6 +77,9 @@ private:
     QString m_username;
     QString m_password;
     virConnectPtr m_conn = nullptr;
+    // Previous host CPU sample for computing utilisation deltas.
+    unsigned long long m_prevCpuTotal = 0;
+    unsigned long long m_prevCpuIdle = 0;
 };
 
 } // namespace vmm

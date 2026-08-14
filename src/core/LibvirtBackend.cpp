@@ -190,6 +190,41 @@ HostInfo LibvirtBackend::hostInfo() {
         free(mstats);
     }
 
+    // Host CPU utilisation via delta between two virNodeGetCPUStats samples.
+    int ncpu = 0;
+    if (virNodeGetCPUStats(m_conn, VIR_NODE_CPU_STATS_ALL_CPUS, nullptr, &ncpu, 0) == 0 && ncpu > 0) {
+        virNodeCPUStatsPtr cstats = static_cast<virNodeCPUStatsPtr>(calloc(ncpu, sizeof(virNodeCPUStats)));
+        if (cstats && virNodeGetCPUStats(m_conn, VIR_NODE_CPU_STATS_ALL_CPUS, cstats, &ncpu, 0) == 0) {
+            unsigned long long total = 0, idle = 0;
+            for (int i = 0; i < ncpu; ++i) {
+                total += cstats[i].value;
+                if (QString::fromLatin1(cstats[i].field) == QLatin1String(VIR_NODE_CPU_STATS_IDLE))
+                    idle = cstats[i].value;
+            }
+            if (m_prevCpuTotal > 0 && total > m_prevCpuTotal) {
+                const double dt = double(total - m_prevCpuTotal);
+                const double di = double(idle - m_prevCpuIdle);
+                h.hostCpuPercent = dt > 0 ? qBound(0.0, (1.0 - di / dt) * 100.0, 100.0) : 0.0;
+            }
+            m_prevCpuTotal = total;
+            m_prevCpuIdle = idle;
+        }
+        free(cstats);
+    }
+
+    // Aggregate storage across all pools (disk usage).
+    virStoragePoolPtr *spools = nullptr;
+    const int nsp = virConnectListAllStoragePools(m_conn, &spools, 0);
+    for (int i = 0; i < qMax(0, nsp); ++i) {
+        virStoragePoolInfo pi;
+        if (virStoragePoolGetInfo(spools[i], &pi) == 0) {
+            h.storageCapacityBytes += pi.capacity;
+            h.storageAllocationBytes += pi.allocation;
+        }
+        virStoragePoolFree(spools[i]);
+    }
+    if (spools) free(spools);
+
     virDomainPtr *domains = nullptr;
     const int n = virConnectListAllDomains(m_conn, &domains, 0);
     if (n >= 0) {

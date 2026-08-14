@@ -11,8 +11,11 @@ Card {
     interactive: true
     signal open()
 
-    property bool isRunning: state === 1
-    property bool isPaused: state === 2
+    // NOTE: `state` is a built-in QML Item property (a string), so the VM's
+    // numeric state role must be read explicitly via model.state.
+    readonly property int vmState: model.state
+    property bool isRunning: vmState === 1
+    property bool isPaused: vmState === 2
 
     function osGlyph(os) {
         const s = (os || "").toLowerCase();
@@ -73,7 +76,7 @@ Card {
         // Status + spec
         RowLayout {
             Layout.fillWidth: true
-            StatusBadge { state: vmCard.state; label: stateText }
+            StatusBadge { state: vmCard.vmState; label: stateText }
             Item { Layout.fillWidth: true }
             Text { text: vcpus + " vCPU · " + vmCard.gib(memoryMax); color: Theme.textFaint; font.pixelSize: Theme.fontXs }
         }

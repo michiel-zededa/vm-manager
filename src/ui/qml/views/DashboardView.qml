@@ -33,6 +33,27 @@ Item {
         const g = kib / 1048576;
         return (g >= 100 ? g.toFixed(0) : g.toFixed(1)) + " GiB";
     }
+    function fmtBytesG(b) {
+        const g = b / 1073741824;
+        return (g >= 100 ? g.toFixed(0) : g.toFixed(1)) + " GiB";
+    }
+    function fmtRate(bps) {
+        if (bps >= 1048576) return (bps / 1048576).toFixed(1) + " MB/s";
+        if (bps >= 1024) return (bps / 1024).toFixed(0) + " KB/s";
+        return Math.round(bps) + " B/s";
+    }
+
+    // Live host network throughput (sum of VM rx+tx), sampled for the graph.
+    property real netBps: 0
+    property real netMax: 1
+    Timer {
+        interval: 2000; repeat: true
+        running: root.scope.length > 0 && root.host.connected === true
+        onTriggered: {
+            root.netBps = App.vms.totalNetBps(root.scope);
+            root.netMax = Math.max(root.netMax * 0.9, root.netBps, 65536);
+        }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -65,11 +86,11 @@ Item {
             Card {
                 visible: root.scope.length > 0 && root.host.connected === true
                 Layout.fillWidth: true
-                implicitHeight: 96
+                implicitHeight: 130
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: Theme.space4
-                    spacing: Theme.space2
+                    spacing: Theme.space3
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Theme.space3
@@ -79,29 +100,67 @@ Item {
                         Text { text: (root.host.hypervisor || "") + (root.host.hostArch ? " · " + root.host.hostArch : "")
                             color: Theme.textDim; font.pixelSize: Theme.fontXs }
                         Item { Layout.fillWidth: true }
-                        Text { text: (root.host.hostCpus || 0) + " " + qsTr("CPUs")
-                            color: Theme.textDim; font.pixelSize: Theme.fontSm }
                         Text { text: (root.host.activeVms || 0) + "/" + (root.host.totalVms || 0) + " " + qsTr("running")
                             color: Theme.textDim; font.pixelSize: Theme.fontSm }
                     }
-                    // Memory usage bar
+
+                    // CPU · Memory · Disk · Network
                     RowLayout {
-                        Layout.fillWidth: true; spacing: Theme.space3
-                        Text { text: qsTr("Memory"); color: Theme.textDim; font.pixelSize: Theme.fontXs; Layout.preferredWidth: 60 }
-                        Rectangle {
-                            Layout.fillWidth: true; height: 8; radius: 4; color: Theme.surfaceAlt
-                            property real frac: (root.host.hostMemoryKiB > 0)
-                                ? Math.min(1, root.host.hostMemUsedKiB / root.host.hostMemoryKiB) : 0
-                            Rectangle {
-                                height: parent.height; radius: 4
-                                width: parent.width * parent.frac
-                                color: parent.frac > 0.85 ? Theme.danger : Theme.accent
-                                Behavior on width { NumberAnimation { duration: Theme.durMed; easing.type: Theme.easing } }
-                            }
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: Theme.space5
+
+                        // -- CPU --
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: Theme.space1
+                            RowLayout { Layout.fillWidth: true
+                                Text { text: qsTr("CPU"); color: Theme.textDim; font.pixelSize: Theme.fontXs; Layout.fillWidth: true }
+                                Text { text: Math.round(root.host.hostCpuPercent || 0) + "%  ·  " + (root.host.hostCpus || 0) + " cores"
+                                    color: Theme.textDim; font.pixelSize: Theme.fontXs } }
+                            Rectangle { Layout.fillWidth: true; height: 8; radius: 4; color: Theme.surfaceAlt
+                                property real frac: Math.min(1, (root.host.hostCpuPercent || 0) / 100)
+                                Rectangle { height: parent.height; radius: 4; width: parent.width * parent.frac
+                                    color: parent.frac > 0.85 ? Theme.danger : Theme.accent
+                                    Behavior on width { NumberAnimation { duration: Theme.durMed } } } }
                         }
-                        Text {
-                            text: root.fmtGiB(root.host.hostMemUsedKiB || 0) + " / " + root.fmtGiB(root.host.hostMemoryKiB || 0)
-                            color: Theme.textDim; font.pixelSize: Theme.fontXs
+                        // -- Memory --
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: Theme.space1
+                            RowLayout { Layout.fillWidth: true
+                                Text { text: qsTr("Memory"); color: Theme.textDim; font.pixelSize: Theme.fontXs; Layout.fillWidth: true }
+                                Text { text: root.fmtGiB(root.host.hostMemUsedKiB || 0) + " / " + root.fmtGiB(root.host.hostMemoryKiB || 0)
+                                    color: Theme.textDim; font.pixelSize: Theme.fontXs } }
+                            Rectangle { Layout.fillWidth: true; height: 8; radius: 4; color: Theme.surfaceAlt
+                                property real frac: (root.host.hostMemoryKiB > 0) ? Math.min(1, root.host.hostMemUsedKiB / root.host.hostMemoryKiB) : 0
+                                Rectangle { height: parent.height; radius: 4; width: parent.width * parent.frac
+                                    color: parent.frac > 0.85 ? Theme.danger : Theme.accent
+                                    Behavior on width { NumberAnimation { duration: Theme.durMed } } } }
+                        }
+                        // -- Disk (pools) --
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: Theme.space1
+                            RowLayout { Layout.fillWidth: true
+                                Text { text: qsTr("Disk"); color: Theme.textDim; font.pixelSize: Theme.fontXs; Layout.fillWidth: true }
+                                Text { text: root.fmtBytesG(root.host.storageAllocationBytes || 0) + " / " + root.fmtBytesG(root.host.storageCapacityBytes || 0)
+                                    color: Theme.textDim; font.pixelSize: Theme.fontXs } }
+                            Rectangle { Layout.fillWidth: true; height: 8; radius: 4; color: Theme.surfaceAlt
+                                property real frac: (root.host.storageCapacityBytes > 0) ? Math.min(1, root.host.storageAllocationBytes / root.host.storageCapacityBytes) : 0
+                                Rectangle { height: parent.height; radius: 4; width: parent.width * parent.frac
+                                    color: parent.frac > 0.85 ? Theme.danger : Theme.accent
+                                    Behavior on width { NumberAnimation { duration: Theme.durMed } } } }
+                        }
+                        // -- Network graph --
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: Theme.space1
+                            RowLayout { Layout.fillWidth: true
+                                Text { text: qsTr("Network"); color: Theme.textDim; font.pixelSize: Theme.fontXs; Layout.fillWidth: true }
+                                Text { text: root.fmtRate(root.netBps); color: Theme.textDim; font.pixelSize: Theme.fontXs } }
+                            Sparkline {
+                                Layout.fillWidth: true; Layout.preferredHeight: 26
+                                value: root.netBps; maxValue: root.netMax
+                                lineColor: Theme.info
+                                fillColor: Qt.rgba(Theme.info.r, Theme.info.g, Theme.info.b, 0.18)
+                            }
                         }
                     }
                 }

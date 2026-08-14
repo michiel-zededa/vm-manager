@@ -91,6 +91,14 @@ QVariantMap VmListModel::vmMap(const QString &uuid) const {
     };
 }
 
+double VmListModel::totalNetBps(const QString &connId) const {
+    double sum = 0;
+    for (const VmInfo &v : m_vms)
+        if (connId.isEmpty() || v.connectionId == connId)
+            sum += double(v.stats.netRxBps) + double(v.stats.netTxBps);
+    return sum;
+}
+
 void VmListModel::mergeConnection(const QString &connId, const QList<VmInfo> &vms) {
     // Simple + correct: drop this connection's rows and re-insert. The set of
     // VMs on a host changes rarely; per-row stat updates use applyStats().

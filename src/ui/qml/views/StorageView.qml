@@ -108,11 +108,18 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: Theme.space3
                                 Rectangle {
-                                    width: 28; height: 28; radius: Theme.radiusSm
-                                    color: chevHover.hovered ? Theme.surfaceHover : Theme.surfaceAlt
-                                    border.width: 1; border.color: Theme.border
-                                    Text { anchors.centerIn: parent; text: poolCard.isOpen ? "▾" : "▸"
-                                        color: Theme.accent; font.pixelSize: Theme.fontMd; font.bold: true }
+                                    width: 30; height: 30; radius: Theme.radiusSm
+                                    color: chevHover.hovered ? Theme.accent : Theme.accentSubtle
+                                    border.width: 1; border.color: Theme.accentBorder
+                                    // A chevron that rotates from ▶ (closed) to ▼ (open).
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "▶"
+                                        color: chevHover.hovered ? "#FFFFFF" : Theme.accent
+                                        font.pixelSize: 12
+                                        rotation: poolCard.isOpen ? 90 : 0
+                                        Behavior on rotation { NumberAnimation { duration: Theme.durFast; easing.type: Theme.easing } }
+                                    }
                                     HoverHandler { id: chevHover; cursorShape: Qt.PointingHandCursor }
                                     TapHandler { onTapped: root.toggle(poolCard.name) }
                                 }

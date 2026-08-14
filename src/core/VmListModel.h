@@ -55,6 +55,9 @@ public:
     Q_INVOKABLE int indexOfUuid(const QString &uuid) const;
     // Live snapshot of one VM's fields (for the detail view to stay current).
     Q_INVOKABLE QVariantMap vmMap(const QString &uuid) const;
+    // Aggregate live network throughput (rx+tx, bytes/s) for a connection
+    // ("" = all) — used for the host network graph.
+    Q_INVOKABLE double totalNetBps(const QString &connId) const;
 
 signals:
     void countChanged();
