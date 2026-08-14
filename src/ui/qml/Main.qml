@@ -26,7 +26,13 @@ ApplicationWindow {
         id: prefs
         property int themeMode: 0           // 0 system, 1 light, 2 dark
     }
-    Component.onCompleted: Theme.mode = prefs.themeMode
+    Component.onCompleted: {
+        Theme.mode = prefs.themeMode;
+        // First-run: if we're on the real backend but tooling is missing, help.
+        const dep = App.dependencyStatus();
+        if (!dep.usingMock && (!dep.qemu || !dep.libvirt))
+            depDialog.open();
+    }
     function setTheme(mode) { Theme.mode = mode; prefs.themeMode = mode; }
 
     // ---- Toast notifications ----------------------------------------------
@@ -194,7 +200,7 @@ ApplicationWindow {
                     }
                 }
 
-                // Backend indicator
+                // Backend indicator — click to see why (dependency check).
                 Rectangle {
                     Layout.fillWidth: true
                     height: 28
@@ -203,9 +209,11 @@ ApplicationWindow {
                     visible: App.usingMockBackend
                     Text {
                         anchors.centerIn: parent
-                        text: qsTr("● Demo mode (mock backend)")
+                        text: qsTr("● Demo mode — check tools")
                         color: Theme.accent; font.pixelSize: Theme.fontXs
                     }
+                    TapHandler { onTapped: depDialog.open() }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                 }
             }
         }
@@ -239,49 +247,8 @@ ApplicationWindow {
     // ===== Dialogs =========================================================
     CreateWizard { id: createWizard }
     ImportView { id: importDialog }
-
-    // Add-connection dialog
-    Dialog {
-        id: connectDialog
-        anchors.centerIn: parent
-        modal: true
-        width: 460
-        padding: Theme.space5
-        background: Card { }
-
-        contentItem: ColumnLayout {
-            spacing: Theme.space4
-            Text { text: qsTr("Connect a host"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
-            Text {
-                text: qsTr("Local: qemu:///system · Remote: qemu+ssh://user@host/system")
-                color: Theme.textDim; font.pixelSize: Theme.fontSm; Layout.fillWidth: true; wrapMode: Text.WordWrap
-            }
-            AppTextField {
-                id: uriField
-                Layout.fillWidth: true
-                placeholderText: "qemu+ssh://user@host/system"
-            }
-            AppTextField {
-                id: nameField
-                Layout.fillWidth: true
-                placeholderText: qsTr("Display name (optional)")
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                Item { Layout.fillWidth: true }
-                AppButton { text: qsTr("Cancel"); variant: "ghost"; onClicked: connectDialog.close() }
-                AppButton {
-                    text: qsTr("Connect"); variant: "primary"
-                    enabled: uriField.text.trim().length > 0
-                    onClicked: {
-                        App.addConnection(uriField.text.trim(),
-                                          nameField.text.trim() || uriField.text.trim());
-                        uriField.clear(); nameField.clear(); connectDialog.close();
-                    }
-                }
-            }
-        }
-    }
+    ConnectionDialog { id: connectDialog }
+    DependencyDialog { id: depDialog }
 
     Toast { id: toast; anchors.top: parent.top; anchors.horizontalCenter: parent.horizontalCenter; anchors.topMargin: Theme.space4 }
 }
