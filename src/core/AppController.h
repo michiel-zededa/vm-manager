@@ -1,6 +1,10 @@
 #pragma once
 
 #include "Types.h"
+#include "VmListModel.h"
+#include "ConnectionModel.h"
+#include "ImageImporter.h"
+#include "SnapshotScheduler.h"
 
 #include <QObject>
 #include <QTimer>
@@ -11,10 +15,6 @@
 namespace vmm {
 
 class ConnectionManager;
-class VmListModel;
-class ConnectionModel;
-class ImageImporter;
-class SnapshotScheduler;
 
 // Root object exposed to QML as `App`. Everything the UI does goes through here.
 // It owns the models and the ConnectionManager and keeps the models fresh via

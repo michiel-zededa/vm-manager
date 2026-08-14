@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QHash>
+#include <QMutex>
 #include <QThreadPool>
 #include <memory>
 #include <functional>
