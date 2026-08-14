@@ -5,6 +5,7 @@
 #include <QList>
 #include <QDateTime>
 #include <QVariantList>
+#include <QVariant>
 
 namespace vmm {
 

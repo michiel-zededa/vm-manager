@@ -1,6 +1,7 @@
 #include "SnapshotScheduler.h"
 
 #include <QSettings>
+#include <algorithm>
 
 namespace vmm {
 
