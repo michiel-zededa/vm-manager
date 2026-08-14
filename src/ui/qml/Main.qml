@@ -16,6 +16,7 @@ ApplicationWindow {
 
     // ---- App-wide navigation state ----------------------------------------
     property string currentPage: "dashboard"
+    property bool allHosts: false          // dashboard scope: all hosts vs current
     property var selectedVm: null          // captured row map when opening detail
 
     function openDetail(vm) { selectedVm = vm; currentPage = "detail"; }
@@ -121,6 +122,24 @@ ApplicationWindow {
                     font.pixelSize: Theme.fontXs; font.letterSpacing: 1
                     Layout.topMargin: Theme.space3
                 }
+                // "All hosts" aggregate scope (dashboard shows every host's VMs).
+                Rectangle {
+                    Layout.fillWidth: true
+                    height: 34
+                    radius: Theme.radiusSm
+                    visible: App.connections.count > 1
+                    color: win.allHosts && win.currentPage === "dashboard" ? Theme.accentSubtle
+                           : allHover.hovered ? Theme.surfaceAlt : "transparent"
+                    RowLayout {
+                        anchors.fill: parent; anchors.leftMargin: Theme.space3; anchors.rightMargin: Theme.space3
+                        spacing: Theme.space3
+                        Text { text: "▦"; color: Theme.textDim; font.pixelSize: Theme.fontSm }
+                        Text { text: qsTr("All hosts"); color: Theme.text; font.pixelSize: Theme.fontSm; Layout.fillWidth: true }
+                        Text { text: App.vms.count; color: Theme.textDim; font.pixelSize: Theme.fontXs }
+                    }
+                    HoverHandler { id: allHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: { win.allHosts = true; win.navigate("dashboard"); } }
+                }
                 ListView {
                     id: hostList
                     Layout.fillWidth: true
@@ -142,12 +161,12 @@ ApplicationWindow {
                         height: 48
                         hoverEnabled: true
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
-                        onClicked: App.currentConnectionId = hostDel.id
+                        onClicked: { win.allHosts = false; App.currentConnectionId = hostDel.id }
                         ToolTip.visible: hostDel.lastError.length > 0 && hovered
                         ToolTip.text: hostDel.lastError
                         background: Rectangle {
                             radius: Theme.radiusSm
-                            color: App.currentConnectionId === hostDel.id ? Theme.accentSubtle
+                            color: (!win.allHosts && App.currentConnectionId === hostDel.id) ? Theme.accentSubtle
                                    : parent.hovered ? Theme.surfaceAlt : "transparent"
                         }
                         contentItem: RowLayout {
@@ -276,7 +295,7 @@ ApplicationWindow {
         }
     }
 
-    Component { id: dashboardComp; DashboardView { onOpenVm: (vm) => win.openDetail(vm) } }
+    Component { id: dashboardComp; DashboardView { allHosts: win.allHosts; onOpenVm: (vm) => win.openDetail(vm) } }
     Component { id: detailComp;    VmDetailView { vm: win.selectedVm; onBack: win.navigate("dashboard") } }
     Component { id: storageComp;   StorageView {} }
     Component { id: networksComp;  NetworkView {} }

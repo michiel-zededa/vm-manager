@@ -53,8 +53,10 @@ void MockBackend::open() {
     add(tmpl);
 
     m_pools = {
-        {"default",  "dir", 512ull*1024*1024*1024, 210ull*1024*1024*1024, true},
-        {"fast-nvme","dir", 1024ull*1024*1024*1024, 640ull*1024*1024*1024, true},
+        {"default",  "dir", 512ull*1024*1024*1024, 210ull*1024*1024*1024, true,
+         "/var/lib/libvirt/images", true},
+        {"fast-nvme","dir", 1024ull*1024*1024*1024, 640ull*1024*1024*1024, true,
+         "/mnt/nvme/images", false},
     };
     const auto vol = [](const QString &n, const QString &dir, quint64 capG, quint64 allocG) {
         return VolumeInfo{n, dir + "/" + n, "qcow2",
@@ -91,6 +93,7 @@ HostInfo MockBackend::hostInfo() {
     h.hostArch = "x86_64";
     h.hostCpus = 16;
     h.hostMemoryKiB = gib(64);
+    h.hostMemUsedKiB = gib(21);
     h.totalVms = m_vms.size();
     h.activeVms = std::count_if(m_vms.cbegin(), m_vms.cend(),
         [](const VmInfo &v){ return v.state == VmState::Running; });
@@ -244,7 +247,7 @@ StoragePoolInfo MockBackend::createStoragePool(const QString &name, const QStrin
     p.capacityBytes = 512ull*1024*1024*1024;
     p.allocationBytes = 0;
     p.active = true;
-    Q_UNUSED(path);
+    p.targetPath = path;
     m_pools.push_back(p);
     m_volumes.insert(name, {});
     return p;

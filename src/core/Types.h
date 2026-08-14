@@ -59,6 +59,7 @@ struct HostInfo {
     int activeVms = 0;
     int totalVms = 0;
     quint64 hostMemoryKiB = 0;
+    quint64 hostMemUsedKiB = 0;
     int hostCpus = 0;
     QString lastError;
 };
@@ -78,6 +79,8 @@ struct StoragePoolInfo {
     quint64 capacityBytes = 0;
     quint64 allocationBytes = 0;
     bool active = false;
+    QString targetPath;           // host directory the pool stores volumes in
+    bool autostart = false;
 };
 
 struct VolumeInfo {

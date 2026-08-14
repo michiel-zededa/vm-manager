@@ -52,6 +52,22 @@ QString ConnectionModel::displayNameFor(const QString &id) const {
     return i >= 0 ? m_hosts.at(i).displayName : QString();
 }
 
+QVariantMap ConnectionModel::hostMap(const QString &id) const {
+    const int i = indexOfId(id);
+    if (i < 0) return {};
+    const HostInfo &h = m_hosts.at(i);
+    return {
+        {"id", h.id}, {"uri", h.uri}, {"displayName", h.displayName},
+        {"connected", h.connected}, {"isLocal", h.isLocal},
+        {"hypervisor", h.hypervisor}, {"hostArch", h.hostArch},
+        {"activeVms", h.activeVms}, {"totalVms", h.totalVms},
+        {"hostCpus", h.hostCpus},
+        {"hostMemoryKiB", QVariant::fromValue(h.hostMemoryKiB)},
+        {"hostMemUsedKiB", QVariant::fromValue(h.hostMemUsedKiB)},
+        {"lastError", h.lastError},
+    };
+}
+
 void ConnectionModel::upsert(const HostInfo &host) {
     const int i = indexOfId(host.id);
     if (i >= 0) {

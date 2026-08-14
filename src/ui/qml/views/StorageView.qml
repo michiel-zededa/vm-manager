@@ -72,6 +72,8 @@ Item {
                         required property bool active
                         required property var allocationBytes
                         required property var capacityBytes
+                        required property string targetPath
+                        required property bool autostart
                         readonly property bool isOpen: root.expanded[name] === true
                         readonly property var vols: root.volumesByPool[name] || []
                         Layout.fillWidth: true
@@ -131,6 +133,24 @@ Item {
                                 Layout.fillWidth: true
                                 visible: poolCard.isOpen
                                 spacing: Theme.space1
+
+                                // Pool metadata: folder path + autostart
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: Theme.space2
+                                    Text { text: "📁"; font.pixelSize: Theme.fontSm }
+                                    Text {
+                                        text: poolCard.targetPath || qsTr("(path unknown)")
+                                        color: Theme.textDim; font.family: Theme.monoFamily; font.pixelSize: Theme.fontXs
+                                        Layout.fillWidth: true; elide: Text.ElideMiddle
+                                    }
+                                    Rectangle {
+                                        visible: poolCard.autostart
+                                        height: 18; radius: 9; color: Theme.accentSubtle
+                                        implicitWidth: asText.implicitWidth + 14
+                                        Text { id: asText; anchors.centerIn: parent; text: qsTr("autostart")
+                                            color: Theme.accent; font.pixelSize: Theme.fontXs }
+                                    }
+                                }
 
                                 Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
 

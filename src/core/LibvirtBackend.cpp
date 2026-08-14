@@ -169,6 +169,27 @@ HostInfo LibvirtBackend::hostInfo() {
         h.hostMemoryKiB = node.memory;
     }
 
+    // Host memory usage: total - (free + buffers + cached).
+    virNodeMemoryStatsPtr mstats = nullptr;
+    int nparams = 0;
+    if (virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS, nullptr, &nparams, 0) == 0
+        && nparams > 0) {
+        mstats = static_cast<virNodeMemoryStatsPtr>(calloc(nparams, sizeof(virNodeMemoryStats)));
+        if (mstats && virNodeGetMemoryStats(m_conn, VIR_NODE_MEMORY_STATS_ALL_CELLS,
+                                            mstats, &nparams, 0) == 0) {
+            quint64 total = 0, avail = 0;
+            for (int i = 0; i < nparams; ++i) {
+                const QString field = QString::fromLatin1(mstats[i].field);
+                if (field == QLatin1String(VIR_NODE_MEMORY_STATS_TOTAL)) total = mstats[i].value;
+                else if (field == QLatin1String(VIR_NODE_MEMORY_STATS_FREE)
+                      || field == QLatin1String(VIR_NODE_MEMORY_STATS_BUFFERS)
+                      || field == QLatin1String(VIR_NODE_MEMORY_STATS_CACHED)) avail += mstats[i].value;
+            }
+            if (total > 0 && total >= avail) h.hostMemUsedKiB = total - avail;
+        }
+        free(mstats);
+    }
+
     virDomainPtr *domains = nullptr;
     const int n = virConnectListAllDomains(m_conn, &domains, 0);
     if (n >= 0) {
@@ -440,6 +461,18 @@ QList<StoragePoolInfo> LibvirtBackend::listStoragePools() {
             p.active = info.state == VIR_STORAGE_POOL_RUNNING;
             p.capacityBytes = info.capacity;
             p.allocationBytes = info.allocation;
+        }
+        int autostart = 0;
+        if (virStoragePoolGetAutostart(pools[i], &autostart) == 0)
+            p.autostart = autostart != 0;
+        if (char *xml = virStoragePoolGetXMLDesc(pools[i], 0)) {
+            const QString s = QString::fromUtf8(xml);
+            free(xml);
+            const int a = s.indexOf(QLatin1String("<path>"));
+            const int b = a >= 0 ? s.indexOf(QLatin1String("</path>"), a) : -1;
+            if (a >= 0 && b > a) p.targetPath = s.mid(a + 6, b - (a + 6)).trimmed();
+            const int t = s.indexOf(QLatin1String("type='"));
+            if (t >= 0) { const int e = s.indexOf('\'', t + 6); if (e > t) p.type = s.mid(t + 6, e - (t + 6)); }
         }
         out.push_back(p);
         virStoragePoolFree(pools[i]);

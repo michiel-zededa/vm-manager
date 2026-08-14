@@ -362,6 +362,7 @@ void AppController::loadStorage(const QString &connId) {
             for (const auto &p : *pools)
                 out.push_back(QVariantMap{
                     {"name", p.name}, {"type", p.type}, {"active", p.active},
+                    {"targetPath", p.targetPath}, {"autostart", p.autostart},
                     {"capacityBytes", QVariant::fromValue(p.capacityBytes)},
                     {"allocationBytes", QVariant::fromValue(p.allocationBytes)}});
             emit storageLoaded(connId, out);

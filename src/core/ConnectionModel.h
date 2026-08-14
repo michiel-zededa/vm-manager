@@ -4,6 +4,7 @@
 
 #include <QAbstractListModel>
 #include <QList>
+#include <QVariantMap>
 
 namespace vmm {
 
@@ -38,6 +39,7 @@ public:
     void remove(const QString &id);
     Q_INVOKABLE int indexOfId(const QString &id) const;
     Q_INVOKABLE QString displayNameFor(const QString &id) const;
+    Q_INVOKABLE QVariantMap hostMap(const QString &id) const;
 
 signals:
     void countChanged();
