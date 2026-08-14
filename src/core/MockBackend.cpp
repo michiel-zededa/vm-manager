@@ -241,6 +241,33 @@ QList<VolumeInfo> MockBackend::listVolumes(const QString &poolName) {
 
 QList<NetworkInfo> MockBackend::listNetworks() { QMutexLocker l(&m_mutex); return m_networks; }
 
+NetworkInfo MockBackend::createNetwork(const QString &name, const QString &mode, const QString &forwardDev) {
+    QMutexLocker lock(&m_mutex);
+    for (const auto &n : m_networks)
+        if (n.name == name)
+            throw BackendError(QStringLiteral("A network named '%1' already exists").arg(name));
+    NetworkInfo n;
+    n.name = name;
+    n.mode = mode.isEmpty() ? QStringLiteral("nat") : mode;
+    n.bridge = QStringLiteral("virbr%1").arg(m_networks.size());
+    n.forwardDev = forwardDev;
+    n.active = true;
+    m_networks.push_back(n);
+    return n;
+}
+
+void MockBackend::deleteNetwork(const QString &name) {
+    QMutexLocker lock(&m_mutex);
+    m_networks.erase(std::remove_if(m_networks.begin(), m_networks.end(),
+        [&](const NetworkInfo &n){ return n.name == name; }), m_networks.end());
+}
+
+void MockBackend::setNetworkActive(const QString &name, bool active) {
+    QMutexLocker lock(&m_mutex);
+    for (auto &n : m_networks)
+        if (n.name == name) n.active = active;
+}
+
 StoragePoolInfo MockBackend::createStoragePool(const QString &name, const QString &type,
                                                const QString &path) {
     QMutexLocker lock(&m_mutex);

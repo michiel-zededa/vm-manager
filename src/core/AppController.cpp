@@ -564,6 +564,28 @@ QString AppController::installHint(const QString &what) const {
 #endif
 }
 
+void AppController::createNetwork(const QString &connId, const QString &name,
+                                  const QString &mode, const QString &forwardDev) {
+    m_cm->runAsync(connId,
+        [name, mode, forwardDev](IHypervisorBackend &b){ b.createNetwork(name, mode, forwardDev); },
+        [this, connId, name] { emit notify(Success, tr("Network created"), name); loadNetworks(connId); },
+        [this](const QString &err){ emit notify(Error, tr("Create network failed"), err); });
+}
+
+void AppController::deleteNetwork(const QString &connId, const QString &name) {
+    m_cm->runAsync(connId,
+        [name](IHypervisorBackend &b){ b.deleteNetwork(name); },
+        [this, connId, name] { emit notify(Success, tr("Network deleted"), name); loadNetworks(connId); },
+        [this](const QString &err){ emit notify(Error, tr("Delete network failed"), err); });
+}
+
+void AppController::setNetworkActive(const QString &connId, const QString &name, bool active) {
+    m_cm->runAsync(connId,
+        [name, active](IHypervisorBackend &b){ b.setNetworkActive(name, active); },
+        [this, connId] { loadNetworks(connId); },
+        [this](const QString &err){ emit notify(Error, tr("Network state change failed"), err); });
+}
+
 void AppController::loadNetworks(const QString &connId) {
     auto nets = std::make_shared<QList<NetworkInfo>>();
     m_cm->runAsync(connId,

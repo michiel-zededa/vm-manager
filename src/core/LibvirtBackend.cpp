@@ -374,20 +374,45 @@ void LibvirtBackend::setAutostart(const QString &uuid, bool on) {
 }
 
 QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString &diskPath) {
-    // Minimal but valid QEMU/KVM domain. Phase 1 will expand (UEFI/OVMF loader,
-    // virtio-net model choices, cloud-init seed, TPM, etc.).
+    // OS-aware domain. The wizard's OS selection drives sensible hardware:
+    //  - Windows: UEFI firmware; Windows 11 also gets a TPM 2.0 + Secure Boot.
+    //    SATA disk + e1000e NIC so the installer boots without extra drivers.
+    //  - Linux/other: virtio disk + NIC (fast, drivers built-in).
     const QString uuid = QUuid::createUuid().toString(QUuid::WithoutBraces);
-    const bool uefi = req.firmware.compare("uefi", Qt::CaseInsensitive) == 0;
+    const QString osv = req.osVariant.toLower();
+    const bool isWindows = osv.startsWith(QLatin1String("win"));
+    const bool isWin11 = osv.contains(QLatin1String("win11")) || osv.contains(QLatin1String("windows11"));
+    // UEFI if requested, or implied by Windows (11 requires it).
+    const bool uefi = req.firmware.compare("uefi", Qt::CaseInsensitive) == 0 || isWindows;
+
+    const QString diskBus = isWindows ? QStringLiteral("sata") : QStringLiteral("virtio");
+    const QString diskDev = isWindows ? QStringLiteral("sda")  : QStringLiteral("vda");
+    const QString nicModel = isWindows ? QStringLiteral("e1000e") : QStringLiteral("virtio");
+    const QString video = isWindows ? QStringLiteral("vga") : QStringLiteral("virtio");
+
     QString media;
     if (!req.installMediaPath.isEmpty()) {
         media = QStringLiteral(
-            "  <disk type='file' device='cdrom'>\n"
-            "    <driver name='qemu' type='raw'/>\n"
-            "    <source file='%1'/>\n"
-            "    <target dev='sda' bus='sata'/>\n"
-            "    <readonly/>\n"
-            "  </disk>\n").arg(req.installMediaPath.toHtmlEscaped());
+            "    <disk type='file' device='cdrom'>\n"
+            "      <driver name='qemu' type='raw'/>\n"
+            "      <source file='%1'/>\n"
+            "      <target dev='sdc' bus='sata'/>\n"
+            "      <readonly/>\n"
+            "    </disk>\n").arg(req.installMediaPath.toHtmlEscaped());
     }
+
+    const QString firmwareAttr = uefi ? QStringLiteral(" firmware='efi'") : QString();
+    QString osExtra;
+    if (uefi && isWin11)
+        osExtra = QStringLiteral("    <loader secure='yes'/>\n");
+    QString tpm;
+    if (isWin11)
+        tpm = QStringLiteral("    <tpm model='tpm-crb'><backend type='emulator' version='2.0'/></tpm>\n");
+    // Secure Boot needs SMM.
+    const QString features = isWin11
+        ? QStringLiteral("  <features><acpi/><apic/><smm state='on'/></features>\n")
+        : QStringLiteral("  <features><acpi/><apic/></features>\n");
+
     return QStringLiteral(
         "<domain type='kvm'>\n"
         "  <name>%1</name>\n"
@@ -397,22 +422,26 @@ QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString
         "  <vcpu>%4</vcpu>\n"
         "  <os%5>\n"
         "    <type arch='x86_64' machine='q35'>hvm</type>\n"
+        "%6"
         "    <boot dev='hd'/>\n"
         "    <boot dev='cdrom'/>\n"
         "  </os>\n"
-        "  <features><acpi/><apic/></features>\n"
+        "%7"
         "  <cpu mode='host-passthrough'/>\n"
+        "  <clock offset='%8'/>\n"
         "  <devices>\n"
         "    <disk type='file' device='disk'>\n"
-        "      <driver name='qemu' type='%6'/>\n"
-        "      <source file='%7'/>\n"
-        "      <target dev='vda' bus='virtio'/>\n"
+        "      <driver name='qemu' type='%9'/>\n"
+        "      <source file='%10'/>\n"
+        "      <target dev='%11' bus='%12'/>\n"
         "    </disk>\n"
-        "%8"
+        "%13"
         "    <interface type='network'>\n"
-        "      <source network='%9'/>\n"
-        "      <model type='virtio'/>\n"
+        "      <source network='%14'/>\n"
+        "      <model type='%15'/>\n"
         "    </interface>\n"
+        "%16"
+        "    <video><model type='%17'/></video>\n"
         "    <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1'/>\n"
         "    <console type='pty'/>\n"
         "    <channel type='unix'><target type='virtio' name='org.qemu.guest_agent.0'/></channel>\n"
@@ -421,8 +450,10 @@ QString LibvirtBackend::buildDomainXml(const VmCreateRequest &req, const QString
         .arg(req.name.toHtmlEscaped(), uuid)
         .arg(req.memoryMiB)
         .arg(req.vcpus)
-        .arg(uefi ? QStringLiteral(" firmware='efi'") : QString(),
-             req.diskFormat, diskPath.toHtmlEscaped(), media, req.networkName.toHtmlEscaped());
+        .arg(firmwareAttr, osExtra, features,
+             isWindows ? QStringLiteral("localtime") : QStringLiteral("utc"),
+             req.diskFormat, diskPath.toHtmlEscaped())
+        .arg(diskDev, diskBus, media, req.networkName.toHtmlEscaped(), nicModel, tpm, video);
 }
 
 VmInfo LibvirtBackend::define(const VmCreateRequest &req) {
@@ -828,6 +859,63 @@ ConsoleInfo LibvirtBackend::consoleInfo(const QString &uuid) {
     }
     virDomainFree(d);
     return c;
+}
+
+NetworkInfo LibvirtBackend::createNetwork(const QString &name, const QString &mode,
+                                          const QString &forwardDev) {
+    const QString m = mode.isEmpty() ? QStringLiteral("nat") : mode;
+    // Pick a deterministic private subnet from the name to avoid clashes.
+    const int octet = 100 + int(qHash(name) % 50);
+    const QString bridge = QStringLiteral("virbr-%1").arg(name.left(8));
+    QString xml;
+    if (m == QLatin1String("bridge")) {
+        // Bridge straight onto an existing host bridge/NIC — no NAT/DHCP.
+        xml = QStringLiteral(
+            "<network>\n  <name>%1</name>\n  <forward mode='bridge'/>\n"
+            "  <bridge name='%2'/>\n</network>\n").arg(name.toHtmlEscaped(), forwardDev.toHtmlEscaped());
+    } else {
+        const QString forward = (m == QLatin1String("isolated"))
+            ? QString()
+            : QStringLiteral("  <forward mode='%1'%2/>\n").arg(m,
+                  forwardDev.isEmpty() ? QString() : QStringLiteral(" dev='%1'").arg(forwardDev.toHtmlEscaped()));
+        xml = QStringLiteral(
+            "<network>\n  <name>%1</name>\n%2"
+            "  <bridge name='%3' stp='on' delay='0'/>\n"
+            "  <ip address='192.168.%4.1' netmask='255.255.255.0'>\n"
+            "    <dhcp><range start='192.168.%4.2' end='192.168.%4.254'/></dhcp>\n"
+            "  </ip>\n</network>\n")
+            .arg(name.toHtmlEscaped(), forward, bridge).arg(octet);
+    }
+    virNetworkPtr net = virNetworkDefineXML(m_conn, xml.toUtf8().constData());
+    if (!net) throwLast(QStringLiteral("define network %1").arg(name));
+    virNetworkSetAutostart(net, 1);
+    virNetworkCreate(net);
+    NetworkInfo n;
+    n.name = name;
+    n.mode = m;
+    n.active = virNetworkIsActive(net) == 1;
+    if (char *b = virNetworkGetBridgeName(net)) { n.bridge = QString::fromUtf8(b); free(b); }
+    n.forwardDev = forwardDev;
+    virNetworkFree(net);
+    return n;
+}
+
+void LibvirtBackend::deleteNetwork(const QString &name) {
+    virNetworkPtr net = virNetworkLookupByName(m_conn, name.toUtf8().constData());
+    if (!net) throwLast(QStringLiteral("find network %1").arg(name));
+    if (virNetworkIsActive(net) == 1)
+        virNetworkDestroy(net);
+    const int rc = virNetworkUndefine(net);
+    virNetworkFree(net);
+    if (rc < 0) throwLast(QStringLiteral("undefine network %1").arg(name));
+}
+
+void LibvirtBackend::setNetworkActive(const QString &name, bool active) {
+    virNetworkPtr net = virNetworkLookupByName(m_conn, name.toUtf8().constData());
+    if (!net) throwLast(QStringLiteral("find network %1").arg(name));
+    const int rc = active ? virNetworkCreate(net) : virNetworkDestroy(net);
+    virNetworkFree(net);
+    if (rc < 0) throwLast(active ? QStringLiteral("start network") : QStringLiteral("stop network"));
 }
 
 VmInfo LibvirtBackend::importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) {

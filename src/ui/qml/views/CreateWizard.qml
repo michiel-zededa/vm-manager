@@ -60,10 +60,20 @@ Popup {
     function reset() {
         step = 0; osFamily = ""; nameField.text = ""; isoField.text = "";
         cpu.value = 2; mem.value = 2048; disk.value = 20; advanced = false;
+        fwCombo.currentIndex = 0;
         App.loadNetworks(App.currentConnectionId);
         App.loadStorage(App.currentConnectionId);
     }
     onOpened: reset()
+
+    // OS-aware defaults: Windows wants more room + UEFI (11 needs it).
+    onOsFamilyChanged: {
+        if (osFamily === "windows") {
+            cpu.value = 4; mem.value = 8192; disk.value = 64; fwCombo.currentIndex = 1; // uefi
+        } else if (osFamily === "linux") {
+            cpu.value = 2; mem.value = 4096; disk.value = 25; fwCombo.currentIndex = 0; // bios
+        }
+    }
 
     // Populate advanced dropdowns from the live host.
     ListModel { id: netModel }

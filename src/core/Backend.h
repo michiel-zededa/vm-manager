@@ -76,6 +76,13 @@ public:
                                     const QString &format, quint64 capacityBytes) = 0;
     virtual void deleteVolume(const QString &poolName, const QString &volumeName) = 0;
 
+    // Virtual network management. `mode` is "nat", "isolated" or "bridge";
+    // `forwardDev` is the host bridge/NIC for bridge/routed modes.
+    virtual NetworkInfo createNetwork(const QString &name, const QString &mode,
+                                      const QString &forwardDev) = 0;
+    virtual void deleteNetwork(const QString &name) = 0;
+    virtual void setNetworkActive(const QString &name, bool active) = 0;
+
     // Console reachability (graphical endpoint + serial availability).
     virtual ConsoleInfo consoleInfo(const QString &uuid) = 0;
 

@@ -108,6 +108,12 @@ public:
                                   const QString &name, const QString &format, double capacityGiB);
     Q_INVOKABLE void deleteVolume(const QString &connId, const QString &poolName, const QString &volumeName);
 
+    // ---- Network management ---------------------------------------------
+    Q_INVOKABLE void createNetwork(const QString &connId, const QString &name,
+                                   const QString &mode, const QString &forwardDev);
+    Q_INVOKABLE void deleteNetwork(const QString &connId, const QString &name);
+    Q_INVOKABLE void setNetworkActive(const QString &connId, const QString &name, bool active);
+
     // ---- Connections helper (build a URI from parts) --------------------
     Q_INVOKABLE QString buildConnectionUri(const QString &transport, const QString &host,
                                            const QString &user, int port, const QString &path) const;

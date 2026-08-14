@@ -63,6 +63,11 @@ public:
                             const QString &format, quint64 capacityBytes) override;
     void deleteVolume(const QString &poolName, const QString &volumeName) override;
 
+    NetworkInfo createNetwork(const QString &name, const QString &mode,
+                              const QString &forwardDev) override;
+    void deleteNetwork(const QString &name) override;
+    void setNetworkActive(const QString &name, bool active) override;
+
     ConsoleInfo consoleInfo(const QString &uuid) override;
 
     VmInfo importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) override;
