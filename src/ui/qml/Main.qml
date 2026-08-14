@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Basic
 import QtQuick.Layouts
+import QtCore
 import VMManager
 
 ApplicationWindow {
@@ -19,6 +20,14 @@ ApplicationWindow {
 
     function openDetail(vm) { selectedVm = vm; currentPage = "detail"; }
     function navigate(page) { currentPage = page; }
+
+    // ---- Persisted preferences (theme) ------------------------------------
+    Settings {
+        id: prefs
+        property int themeMode: 0           // 0 system, 1 light, 2 dark
+    }
+    Component.onCompleted: Theme.mode = prefs.themeMode
+    function setTheme(mode) { Theme.mode = mode; prefs.themeMode = mode; }
 
     // ---- Toast notifications ----------------------------------------------
     Connections {
@@ -158,6 +167,33 @@ ApplicationWindow {
                     onClicked: connectDialog.open()
                 }
 
+                // Theme switcher — System / Light / Dark
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.space1
+                    Repeater {
+                        model: [{ m: 0, t: qsTr("Auto") }, { m: 1, t: qsTr("Light") }, { m: 2, t: qsTr("Dark") }]
+                        delegate: Rectangle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            height: 26
+                            radius: Theme.radiusSm
+                            color: Theme.mode === modelData.m ? Theme.accentSubtle
+                                   : hover.hovered ? Theme.surfaceAlt : "transparent"
+                            border.width: 1
+                            border.color: Theme.mode === modelData.m ? Theme.accentBorder : "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.t
+                                color: Theme.mode === modelData.m ? Theme.accent : Theme.textDim
+                                font.pixelSize: Theme.fontXs
+                            }
+                            HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
+                            TapHandler { onTapped: win.setTheme(modelData.m) }
+                        }
+                    }
+                }
+
                 // Backend indicator
                 Rectangle {
                     Layout.fillWidth: true
@@ -220,19 +256,15 @@ ApplicationWindow {
                 text: qsTr("Local: qemu:///system · Remote: qemu+ssh://user@host/system")
                 color: Theme.textDim; font.pixelSize: Theme.fontSm; Layout.fillWidth: true; wrapMode: Text.WordWrap
             }
-            TextField {
+            AppTextField {
                 id: uriField
                 Layout.fillWidth: true
                 placeholderText: "qemu+ssh://user@host/system"
-                color: Theme.text
-                background: Rectangle { radius: Theme.radiusSm; color: Theme.surfaceAlt; border.color: Theme.border; border.width: 1 }
             }
-            TextField {
+            AppTextField {
                 id: nameField
                 Layout.fillWidth: true
                 placeholderText: qsTr("Display name (optional)")
-                color: Theme.text
-                background: Rectangle { radius: Theme.radiusSm; color: Theme.surfaceAlt; border.color: Theme.border; border.width: 1 }
             }
             RowLayout {
                 Layout.fillWidth: true

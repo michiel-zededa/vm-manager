@@ -46,6 +46,11 @@ qt_add_qml_module(vm-manager
         ui/qml/Main.qml
         ui/qml/Theme.qml
         ui/qml/components/AppButton.qml
+        ui/qml/components/AppTextField.qml
+        ui/qml/components/AppComboBox.qml
+        ui/qml/components/AppSwitch.qml
+        ui/qml/components/AppCheckBox.qml
+        ui/qml/components/LabeledSlider.qml
         ui/qml/components/IconButton.qml
         ui/qml/components/Card.qml
         ui/qml/components/StatusBadge.qml

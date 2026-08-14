@@ -3,41 +3,60 @@ import QtQuick
 
 // Single source of truth for the visual language. Every color, space, radius,
 // font size and motion timing used in the app comes from here — no magic
-// numbers in views. Flip `dark` to retheme the whole app.
+// numbers in views.
+//
+// `mode` selects the palette: 0 = follow the OS, 1 = light, 2 = dark. When
+// following the OS, `dark` tracks Application.styleHints.colorScheme live, so
+// the whole app re-themes the moment the system appearance changes.
 QtObject {
     id: theme
 
-    // Follows the OS in a real build (phase 1 wires QStyleHints.colorScheme);
-    // defaults to dark, which suits a dense management tool.
-    property bool dark: true
+    // 0 = system, 1 = light, 2 = dark. Persisted in Main.qml via QtCore.Settings.
+    property int mode: 0
+    readonly property bool dark: mode === 1 ? false
+                               : mode === 2 ? true
+                               : Application.styleHints.colorScheme === Qt.Dark
 
     // ---- Brand -------------------------------------------------------------
-    readonly property color accent:        "#6366F1"   // indigo 500
-    readonly property color accentHover:   "#7C7DF5"
-    readonly property color accentPressed: "#4F46E5"
+    readonly property color accent:        dark ? "#6366F1" : "#4F46E5"
+    readonly property color accentHover:   dark ? "#7C7DF5" : "#6366F1"
+    readonly property color accentPressed: dark ? "#4F46E5" : "#4338CA"
     readonly property color accentText:    "#FFFFFF"
     readonly property color accentSubtle:  dark ? "#1E2140" : "#EEF0FF"
+    readonly property color accentBorder:  dark ? "#3B3F73" : "#C7CBFF"
 
     // ---- Semantic / status -------------------------------------------------
-    readonly property color running: "#22C55E"
-    readonly property color paused:  "#F59E0B"
-    readonly property color stopped: "#64748B"
-    readonly property color danger:  "#EF4444"
-    readonly property color info:    "#38BDF8"
+    readonly property color running: dark ? "#22C55E" : "#16A34A"
+    readonly property color paused:  dark ? "#F59E0B" : "#D97706"
+    readonly property color stopped: dark ? "#64748B" : "#94A3B8"
+    readonly property color danger:  dark ? "#EF4444" : "#DC2626"
+    readonly property color dangerSubtle: dark ? "#3A1D22" : "#FEE2E2"
+    readonly property color info:    dark ? "#38BDF8" : "#0284C7"
+    readonly property color warning: dark ? "#F59E0B" : "#B45309"
+    readonly property color success: dark ? "#22C55E" : "#16A34A"
 
     // ---- Surfaces ----------------------------------------------------------
-    readonly property color bg:         dark ? "#0F1117" : "#F4F5F8"
-    readonly property color surface:    dark ? "#171A21" : "#FFFFFF"
-    readonly property color surfaceAlt: dark ? "#1E222B" : "#EDEFF3"
-    readonly property color surfaceHover: dark ? "#232833" : "#E4E7ED"
-    readonly property color sidebar:    dark ? "#12141A" : "#FAFBFC"
-    readonly property color border:     dark ? "#2A2F3A" : "#DEE2EA"
-    readonly property color overlay:    dark ? "#000000CC" : "#1A1D2499"
+    readonly property color bg:          dark ? "#0F1117" : "#F4F5F8"
+    readonly property color surface:     dark ? "#171A21" : "#FFFFFF"
+    readonly property color surfaceAlt:  dark ? "#1E222B" : "#EDEFF3"
+    readonly property color surfaceHover:dark ? "#252A35" : "#E2E6EE"
+    readonly property color sidebar:     dark ? "#12141A" : "#FAFBFC"
+    readonly property color border:      dark ? "#2A2F3A" : "#D6DBE4"
+    readonly property color borderStrong:dark ? "#3A4150" : "#C2C9D6"
+    readonly property color overlay:     dark ? "#000000CC" : "#1A1D2480"
+
+    // ---- Inputs (fields, dropdowns) ----------------------------------------
+    readonly property color field:        dark ? "#1E222B" : "#FFFFFF"
+    readonly property color fieldBorder:  dark ? "#333A47" : "#CBD2DD"
+    readonly property color fieldFocus:   accent
+    readonly property color placeholder:  dark ? "#828B9C" : "#8A93A3"
+    readonly property color selection:    accent
 
     // ---- Text --------------------------------------------------------------
-    readonly property color text:      dark ? "#E6E9EF" : "#1A1D24"
-    readonly property color textDim:   dark ? "#9AA3B2" : "#5B6472"
-    readonly property color textFaint: dark ? "#5C6575" : "#9AA1AD"
+    readonly property color text:      dark ? "#E6E9EF" : "#161A22"
+    readonly property color textDim:   dark ? "#A2ABBA" : "#4A5262"
+    readonly property color textFaint: dark ? "#727C8E" : "#727C8C"
+    readonly property color textOnAccent: "#FFFFFF"
 
     // ---- Spacing (4pt scale) -----------------------------------------------
     readonly property int space1: 4
@@ -56,7 +75,7 @@ QtObject {
 
     // ---- Typography --------------------------------------------------------
     readonly property string fontFamily: Qt.application.font.family
-    readonly property string monoFamily: "monospace"
+    readonly property string monoFamily: "Menlo, Consolas, monospace"
     readonly property int fontXs: 11
     readonly property int fontSm: 12
     readonly property int fontMd: 14
