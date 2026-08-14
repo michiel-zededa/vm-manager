@@ -42,8 +42,13 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.2'
+          version: '6.8.2'
           cache: true
+
+      # Match the compiler to the MSVC-built Qt on Windows (see ci.yml).
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVMM_WITH_LIBVIRT=OFF -DVMM_BUILD_TESTS=OFF

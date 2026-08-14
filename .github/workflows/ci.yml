@@ -36,8 +36,15 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.2'
+          version: '6.8.2'
           cache: true
+
+      # Ninja picks the first compiler on PATH; on the Windows runner that is
+      # MinGW, which is ABI-incompatible with the MSVC-built Qt. Activate the
+      # MSVC environment so cl.exe is used instead.
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
         run: >
@@ -67,7 +74,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.7.2'
+          version: '6.8.2'
           cache: true
       - name: Configure (libvirt ON)
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVMM_WITH_LIBVIRT=ON
