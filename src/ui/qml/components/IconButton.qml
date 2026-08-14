@@ -7,22 +7,26 @@ import VMManager
 Button {
     id: control
     property string glyph: "•"
-    property color glyphColor: Theme.text
+    property bool danger: false
+    property color glyphColor: danger ? Theme.danger : Theme.textDim
     property string tooltip: ""
+    property string tip: ""        // convenience alias for tooltip
 
     implicitWidth: 34
     implicitHeight: 34
     hoverEnabled: true
 
     HoverHandler { cursorShape: Qt.PointingHandCursor }
-    ToolTip.visible: tooltip.length > 0 && hovered
-    ToolTip.text: tooltip
+    ToolTip.visible: (tooltip.length > 0 || tip.length > 0) && hovered
+    ToolTip.text: tip.length > 0 ? tip : tooltip
     ToolTip.delay: 400
 
     contentItem: Text {
         text: control.glyph
-        color: control.enabled ? control.glyphColor : Theme.textFaint
-        font.pixelSize: Theme.fontLg
+        color: control.enabled ? (control.hovered ? (control.danger ? Theme.danger : Theme.text)
+                                                   : control.glyphColor)
+                               : Theme.textFaint
+        font.pixelSize: Theme.fontMd
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
