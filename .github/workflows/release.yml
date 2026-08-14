@@ -22,10 +22,13 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: vm-manager-linux-x86_64.tar.gz
+            qt: '6.8.2'
           - os: macos-latest
             asset: vm-manager-macos.dmg
+            qt: '6.11.1'
           - os: windows-latest
             asset: vm-manager-windows-x64.zip
+            qt: '6.8.2'
     steps:
       - uses: actions/checkout@v4
 
@@ -42,7 +45,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          version: ${{ matrix.qt }}
           cache: true
 
       # Match the compiler to the MSVC-built Qt on Windows (see ci.yml).

@@ -19,7 +19,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # Qt is pinned per-OS: macOS needs >= 6.11 to drop the removed AGL
+        # framework, but 6.11.x is not yet published for Windows via aqt, so
+        # Windows/Linux stay on the 6.8 LTS. Each pairing below is CI-proven.
+        include:
+          - os: ubuntu-latest
+            qt: '6.8.2'
+          - os: macos-latest
+            qt: '6.11.1'
+          - os: windows-latest
+            qt: '6.8.2'
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +45,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          version: ${{ matrix.qt }}
           cache: true
 
       # Ninja picks the first compiler on PATH; on the Windows runner that is
@@ -74,7 +83,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: '6.11.1'
+          version: '6.8.2'
           cache: true
       - name: Configure (libvirt ON)
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DVMM_WITH_LIBVIRT=ON
