@@ -102,6 +102,16 @@ struct NetworkInfo {
     QString forwardDev;
 };
 
+// One disk/cdrom attached to a domain (parsed from its XML).
+struct DiskInfo {
+    QString target;               // vda, sda, sdc …
+    QString path;                 // source file/volume
+    QString bus;                  // virtio, sata, scsi
+    QString format;               // qcow2, raw
+    QString device;               // "disk" or "cdrom"
+    quint64 capacityBytes = 0;
+};
+
 // How to reach a VM's console (graphical + serial), parsed from the domain.
 struct ConsoleInfo {
     QString graphicsType;         // "vnc", "spice", or "" (none)

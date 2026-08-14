@@ -197,6 +197,10 @@ Item {
                                         Item { Layout.fillWidth: true }
                                         Text { text: root.fmtBytes(modelData.capacityBytes)
                                             color: Theme.textDim; font.pixelSize: Theme.fontXs }
+                                        IconButton { glyph: "⤢"; tip: qsTr("Resize")
+                                            onClicked: { resizeDialog.poolName = poolCard.name; resizeDialog.volName = modelData.name;
+                                                         resizeDialog.currentGiB = modelData.capacityBytes / 1073741824;
+                                                         resizeDialog.open(); } }
                                         IconButton { glyph: "🗑"; tip: qsTr("Delete volume"); danger: true
                                             onClicked: { delVolDialog.poolName = poolCard.name;
                                                          delVolDialog.volName = modelData.name; delVolDialog.open(); } }
@@ -328,6 +332,36 @@ Item {
             }
         }
     }
+    // ===== Resize volume dialog =====
+    Dialog {
+        id: resizeDialog
+        property string poolName: ""
+        property string volName: ""
+        property real currentGiB: 20
+        anchors.centerIn: parent; modal: true; width: 460; padding: Theme.space5
+        background: Card {}
+        onOpened: resizeSize.value = currentGiB
+        contentItem: ColumnLayout {
+            spacing: Theme.space4
+            Text { text: qsTr("Resize ") + resizeDialog.volName; color: Theme.text
+                font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
+            Text { text: qsTr("Growing a volume is safe; shrinking can lose data. Grow the guest filesystem afterwards.")
+                color: Theme.textDim; font.pixelSize: Theme.fontSm; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            LabeledSlider { id: resizeSize; label: qsTr("New size"); from: 1; to: 4096; stepSize: 1
+                value: resizeDialog.currentGiB
+                unitOptions: [{name: "GiB", factor: 1}, {name: "TiB", factor: 1024}] }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                AppButton { text: qsTr("Cancel"); variant: "ghost"; onClicked: resizeDialog.close() }
+                AppButton { text: qsTr("Resize"); variant: "primary"
+                    onClicked: { App.resizeVolume(App.currentConnectionId, resizeDialog.poolName,
+                                                  resizeDialog.volName, resizeSize.value);
+                                 resizeDialog.close(); } }
+            }
+        }
+    }
+
     Dialog {
         id: delVolDialog
         property string poolName: ""

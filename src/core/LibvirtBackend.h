@@ -70,6 +70,13 @@ public:
 
     ConsoleInfo consoleInfo(const QString &uuid) override;
 
+    QList<DiskInfo> listDisks(const QString &uuid) override;
+    void attachDisk(const QString &uuid, const QString &volumePath,
+                    const QString &bus, const QString &format) override;
+    void detachDisk(const QString &uuid, const QString &target) override;
+    void resizeVolume(const QString &poolName, const QString &volumeName,
+                      quint64 capacityBytes) override;
+
     VmInfo importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) override;
 
 private:

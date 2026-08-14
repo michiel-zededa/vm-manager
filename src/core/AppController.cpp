@@ -400,6 +400,46 @@ void AppController::openConsoleExternally(const QString &connId, const QString &
         [this](const QString &err){ emit notify(Error, tr("Console failed"), err); });
 }
 
+void AppController::loadDisks(const QString &connId, const QString &uuid) {
+    auto disks = std::make_shared<QList<DiskInfo>>();
+    m_cm->runAsync(connId,
+        [uuid, disks](IHypervisorBackend &b){ *disks = b.listDisks(uuid); },
+        [this, uuid, disks] {
+            QVariantList out;
+            for (const auto &d : *disks)
+                out.push_back(QVariantMap{
+                    {"target", d.target}, {"path", d.path}, {"bus", d.bus},
+                    {"format", d.format}, {"device", d.device},
+                    {"capacityBytes", QVariant::fromValue(d.capacityBytes)}});
+            emit disksLoaded(uuid, out);
+        },
+        [this](const QString &err){ emit notify(Warning, tr("Load disks failed"), err); });
+}
+
+void AppController::attachDisk(const QString &connId, const QString &uuid,
+                               const QString &volumePath, const QString &bus, const QString &format) {
+    m_cm->runAsync(connId,
+        [uuid, volumePath, bus, format](IHypervisorBackend &b){ b.attachDisk(uuid, volumePath, bus, format); },
+        [this, connId, uuid] { emit notify(Success, tr("Disk attached"), {}); loadDisks(connId, uuid); },
+        [this](const QString &err){ emit notify(Error, tr("Attach disk failed"), err); });
+}
+
+void AppController::detachDisk(const QString &connId, const QString &uuid, const QString &target) {
+    m_cm->runAsync(connId,
+        [uuid, target](IHypervisorBackend &b){ b.detachDisk(uuid, target); },
+        [this, connId, uuid, target] { emit notify(Success, tr("Disk detached"), target); loadDisks(connId, uuid); },
+        [this](const QString &err){ emit notify(Error, tr("Detach disk failed"), err); });
+}
+
+void AppController::resizeVolume(const QString &connId, const QString &poolName,
+                                 const QString &volumeName, double capacityGiB) {
+    const quint64 bytes = quint64(capacityGiB * 1024.0 * 1024.0 * 1024.0);
+    m_cm->runAsync(connId,
+        [poolName, volumeName, bytes](IHypervisorBackend &b){ b.resizeVolume(poolName, volumeName, bytes); },
+        [this, connId, volumeName] { emit notify(Success, tr("Volume resized"), volumeName); loadStorage(connId); },
+        [this](const QString &err){ emit notify(Error, tr("Resize failed"), err); });
+}
+
 void AppController::importImage(const QString &connId, const QString &sourcePath,
                                 const QVariantMap &request) {
     const VmCreateRequest req = toRequest(request);

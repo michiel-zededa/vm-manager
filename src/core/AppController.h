@@ -89,6 +89,14 @@ public:
     // Open the graphical console in the OS's viewer (Screen Sharing / vinagre / …).
     Q_INVOKABLE void openConsoleExternally(const QString &connId, const QString &uuid);
 
+    // ---- Disks ----------------------------------------------------------
+    Q_INVOKABLE void loadDisks(const QString &connId, const QString &uuid); // -> disksLoaded
+    Q_INVOKABLE void attachDisk(const QString &connId, const QString &uuid,
+                                const QString &volumePath, const QString &bus, const QString &format);
+    Q_INVOKABLE void detachDisk(const QString &connId, const QString &uuid, const QString &target);
+    Q_INVOKABLE void resizeVolume(const QString &connId, const QString &poolName,
+                                  const QString &volumeName, double capacityGiB);
+
     // ---- Import ---------------------------------------------------------
     // Converts (if needed) then defines a VM. request as in createVm.
     Q_INVOKABLE void importImage(const QString &connId, const QString &sourcePath,
@@ -129,6 +137,7 @@ signals:
     void vmActionCompleted(const QString &uuid, const QString &action);
     void snapshotsLoaded(const QString &uuid, const QVariantList &snapshots);
     void consoleLoaded(const QString &uuid, const QVariantMap &console);
+    void disksLoaded(const QString &uuid, const QVariantList &disks);
     void storageLoaded(const QString &connId, const QVariantList &pools);
     void volumesLoaded(const QString &connId, const QString &poolName, const QVariantList &volumes);
     void networksLoaded(const QString &connId, const QVariantList &networks);

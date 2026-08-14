@@ -335,6 +335,43 @@ ConsoleInfo MockBackend::consoleInfo(const QString &uuid) {
     return c;
 }
 
+QList<DiskInfo> MockBackend::listDisks(const QString &uuid) {
+    QMutexLocker lock(&m_mutex);
+    const VmInfo v = require(uuid);
+    if (!m_disks.contains(uuid)) {
+        // Seed a believable primary disk for the demo.
+        m_disks.insert(uuid, { DiskInfo{"vda",
+            "/var/lib/libvirt/images/" + v.name + ".qcow2", "virtio", "qcow2", "disk",
+            40ull*1024*1024*1024} });
+    }
+    return m_disks.value(uuid);
+}
+
+void MockBackend::attachDisk(const QString &uuid, const QString &volumePath,
+                             const QString &bus, const QString &format) {
+    QMutexLocker lock(&m_mutex);
+    require(uuid);
+    auto &disks = m_disks[uuid];
+    const char letter = char('a' + qMin(25, disks.size()));
+    const QString prefix = bus == QLatin1String("virtio") ? QStringLiteral("vd") : QStringLiteral("sd");
+    disks.push_back(DiskInfo{ prefix + letter, volumePath, bus.isEmpty() ? "virtio" : bus,
+        format.isEmpty() ? "qcow2" : format, "disk", 20ull*1024*1024*1024 });
+}
+
+void MockBackend::detachDisk(const QString &uuid, const QString &target) {
+    QMutexLocker lock(&m_mutex);
+    auto &disks = m_disks[uuid];
+    disks.erase(std::remove_if(disks.begin(), disks.end(),
+        [&](const DiskInfo &d){ return d.target == target; }), disks.end());
+}
+
+void MockBackend::resizeVolume(const QString &poolName, const QString &volumeName, quint64 capacityBytes) {
+    QMutexLocker lock(&m_mutex);
+    auto &vols = m_volumes[poolName];
+    for (auto &v : vols)
+        if (v.name == volumeName) v.capacityBytes = capacityBytes;
+}
+
 VmInfo MockBackend::importPreparedDisk(const QString &, const VmCreateRequest &req) {
     return define(req);
 }

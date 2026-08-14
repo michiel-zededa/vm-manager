@@ -918,6 +918,117 @@ void LibvirtBackend::setNetworkActive(const QString &name, bool active) {
     if (rc < 0) throwLast(active ? QStringLiteral("start network") : QStringLiteral("stop network"));
 }
 
+QList<DiskInfo> LibvirtBackend::listDisks(const QString &uuid) {
+    virDomainPtr d = lookup(uuid);
+    QList<DiskInfo> out;
+    if (char *xml = virDomainGetXMLDesc(d, 0)) {
+        const QString s = QString::fromUtf8(xml);
+        free(xml);
+        const auto attr = [](const QString &tag, const QString &key) -> QString {
+            const QString k = key + QStringLiteral("='");
+            int a = tag.indexOf(k);
+            if (a < 0) return {};
+            a += k.size();
+            const int b = tag.indexOf('\'', a);
+            return b > a ? tag.mid(a, b - a) : QString();
+        };
+        int pos = 0;
+        while (true) {
+            const int di = s.indexOf(QLatin1String("<disk"), pos);
+            if (di < 0) break;
+            const int de = s.indexOf(QLatin1String("</disk>"), di);
+            if (de < 0) break;
+            const QString disk = s.mid(di, de - di);
+            pos = de + 7;
+            DiskInfo info;
+            info.device = attr(disk, QStringLiteral("device"));
+            // target dev + bus
+            const int ti = disk.indexOf(QLatin1String("<target"));
+            if (ti >= 0) {
+                const QString t = disk.mid(ti, disk.indexOf('>', ti) - ti);
+                info.target = attr(t, QStringLiteral("dev"));
+                info.bus = attr(t, QStringLiteral("bus"));
+            }
+            // driver type (format)
+            const int dri = disk.indexOf(QLatin1String("<driver"));
+            if (dri >= 0) {
+                const QString dr = disk.mid(dri, disk.indexOf('>', dri) - dri);
+                info.format = attr(dr, QStringLiteral("type"));
+            }
+            // source file / dev
+            const int si = disk.indexOf(QLatin1String("<source"));
+            if (si >= 0) {
+                const QString src = disk.mid(si, disk.indexOf('>', si) - si);
+                info.path = attr(src, QStringLiteral("file"));
+                if (info.path.isEmpty()) info.path = attr(src, QStringLiteral("dev"));
+            }
+            if (!info.path.isEmpty()) {
+                if (virStorageVolPtr v = virStorageVolLookupByPath(m_conn, info.path.toUtf8().constData())) {
+                    virStorageVolInfo vi;
+                    if (virStorageVolGetInfo(v, &vi) == 0) info.capacityBytes = vi.capacity;
+                    virStorageVolFree(v);
+                }
+            }
+            out.push_back(info);
+        }
+    }
+    virDomainFree(d);
+    return out;
+}
+
+void LibvirtBackend::attachDisk(const QString &uuid, const QString &volumePath,
+                                const QString &bus, const QString &format) {
+    virDomainPtr d = lookup(uuid);
+    // Choose the next free target dev on the bus.
+    const QString prefix = (bus == QLatin1String("virtio")) ? QStringLiteral("vd") : QStringLiteral("sd");
+    QList<DiskInfo> disks = listDisks(uuid);
+    char letter = 'a';
+    while (true) {
+        const QString cand = prefix + QChar(letter);
+        bool used = false;
+        for (const auto &di : disks) if (di.target == cand) { used = true; break; }
+        if (!used) break;
+        if (letter++ >= 'z') break;
+    }
+    const QString target = prefix + QChar(letter);
+    const QString xml = QStringLiteral(
+        "<disk type='file' device='disk'>\n"
+        "  <driver name='qemu' type='%1'/>\n"
+        "  <source file='%2'/>\n"
+        "  <target dev='%3' bus='%4'/>\n"
+        "</disk>\n")
+        .arg(format.isEmpty() ? QStringLiteral("qcow2") : format,
+             volumePath.toHtmlEscaped(), target,
+             bus.isEmpty() ? QStringLiteral("virtio") : bus);
+    unsigned int flags = VIR_DOMAIN_AFFECT_CONFIG;
+    if (virDomainIsActive(d) == 1) flags |= VIR_DOMAIN_AFFECT_LIVE;
+    const int rc = virDomainAttachDeviceFlags(d, xml.toUtf8().constData(), flags);
+    virDomainFree(d);
+    if (rc < 0) throwLast(QStringLiteral("attach disk"));
+}
+
+void LibvirtBackend::detachDisk(const QString &uuid, const QString &target) {
+    virDomainPtr d = lookup(uuid);
+    const QString xml = QStringLiteral(
+        "<disk type='file' device='disk'><target dev='%1'/></disk>\n").arg(target.toHtmlEscaped());
+    unsigned int flags = VIR_DOMAIN_AFFECT_CONFIG;
+    if (virDomainIsActive(d) == 1) flags |= VIR_DOMAIN_AFFECT_LIVE;
+    const int rc = virDomainDetachDeviceFlags(d, xml.toUtf8().constData(), flags);
+    virDomainFree(d);
+    if (rc < 0) throwLast(QStringLiteral("detach disk"));
+}
+
+void LibvirtBackend::resizeVolume(const QString &poolName, const QString &volumeName, quint64 capacityBytes) {
+    virStoragePoolPtr pool = virStoragePoolLookupByName(m_conn, poolName.toUtf8().constData());
+    if (!pool) throwLast(QStringLiteral("find pool %1").arg(poolName));
+    virStorageVolPtr vol = virStorageVolLookupByName(pool, volumeName.toUtf8().constData());
+    virStoragePoolFree(pool);
+    if (!vol) throwLast(QStringLiteral("find volume %1").arg(volumeName));
+    const int rc = virStorageVolResize(vol, capacityBytes, 0);
+    virStorageVolFree(vol);
+    if (rc < 0) throwLast(QStringLiteral("resize volume %1").arg(volumeName));
+}
+
 VmInfo LibvirtBackend::importPreparedDisk(const QString &diskPath, const VmCreateRequest &req) {
     const QString xml = buildDomainXml(req, diskPath);
     virDomainPtr dom = virDomainDefineXML(m_conn, xml.toUtf8().constData());

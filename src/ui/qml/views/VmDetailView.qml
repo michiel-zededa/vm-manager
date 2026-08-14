@@ -86,6 +86,7 @@ Item {
             background: Rectangle { color: "transparent" }
             AppTabButton { text: qsTr("Overview"); width: implicitWidth + Theme.space5 }
             AppTabButton { text: qsTr("Console"); width: implicitWidth + Theme.space5 }
+            AppTabButton { text: qsTr("Hardware"); width: implicitWidth + Theme.space5 }
             AppTabButton { text: qsTr("Snapshots"); width: implicitWidth + Theme.space5 }
         }
 
@@ -134,6 +135,72 @@ Item {
 
             // --- Console ---
             ConsoleView { vm: root.live }
+
+            // --- Hardware (disks) ---
+            ColumnLayout {
+                spacing: Theme.space4
+
+                ListModel { id: diskModel }
+                Connections {
+                    target: App
+                    function onDisksLoaded(uuid, disks) {
+                        if (!root.vm || uuid !== root.vm.uuid) return;
+                        diskModel.clear();
+                        for (let i = 0; i < disks.length; ++i) diskModel.append(disks[i]);
+                    }
+                }
+                Component.onCompleted: if (root.vm) App.loadDisks(root.vm.connectionId, root.vm.uuid)
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text { text: qsTr("Disks"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
+                    Item { Layout.fillWidth: true }
+                    AppButton { text: qsTr("＋ Attach disk"); variant: "primary"; onClicked: attachDialog.open() }
+                }
+                Card {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    ListView {
+                        anchors.fill: parent; anchors.margins: Theme.space2; clip: true
+                        model: diskModel; spacing: Theme.space1
+                        delegate: Item {
+                            required property string target
+                            required property string path
+                            required property string bus
+                            required property string format
+                            required property string device
+                            required property var capacityBytes
+                            width: ListView.view.width
+                            height: 52
+                            RowLayout {
+                                anchors.fill: parent; anchors.leftMargin: Theme.space2; anchors.rightMargin: Theme.space2
+                                spacing: Theme.space3
+                                Text { text: device === "cdrom" ? "💿" : "💽"; font.pixelSize: Theme.fontMd }
+                                ColumnLayout {
+                                    spacing: 0; Layout.fillWidth: true
+                                    RowLayout {
+                                        spacing: Theme.space2
+                                        Text { text: target; color: Theme.text; font.pixelSize: Theme.fontMd; font.weight: Font.Medium }
+                                        Rectangle { height: 16; radius: 8; color: Theme.surfaceAlt; implicitWidth: busT.implicitWidth + 12
+                                            Text { id: busT; anchors.centerIn: parent; text: bus + (format ? " · " + format : "")
+                                                color: Theme.textDim; font.pixelSize: Theme.fontXs } }
+                                    }
+                                    Text { text: path; color: Theme.textFaint; font.pixelSize: Theme.fontXs; elide: Text.ElideMiddle; Layout.fillWidth: true }
+                                }
+                                Text { text: capacityBytes > 0 ? (capacityBytes/1073741824).toFixed(0) + " GiB" : ""
+                                    color: Theme.textDim; font.pixelSize: Theme.fontXs }
+                                IconButton { glyph: "⏏"; tip: qsTr("Detach"); danger: true
+                                    enabled: device !== "disk" || target !== "vda"   // don't detach the boot disk
+                                    onClicked: App.detachDisk(root.vm.connectionId, root.vm.uuid, target) }
+                            }
+                        }
+                    }
+                    EmptyState {
+                        anchors.centerIn: parent
+                        visible: diskModel.count === 0
+                        glyph: "💽"; title: qsTr("No disks"); body: qsTr("Attach a volume from a storage pool.")
+                    }
+                }
+            }
 
             // --- Snapshots (inline panel) ---
             ColumnLayout {
@@ -312,6 +379,58 @@ Item {
                 AppButton { text: qsTr("Cancel"); variant: "ghost"; onClicked: deleteDialog.close() }
                 AppButton { text: qsTr("Delete"); variant: "danger"
                     onClicked: { App.deleteVm(root.vm.connectionId, root.vm.uuid, removeStorage.checked); deleteDialog.close(); root.back(); } }
+            }
+        }
+    }
+
+    // Attach-disk dialog: pick an existing volume from a pool + bus.
+    Dialog {
+        id: attachDialog
+        anchors.centerIn: parent; modal: true; width: 480; padding: Theme.space5
+        background: Card {}
+        ListModel { id: apPools }
+        ListModel { id: apVols }
+        Connections {
+            target: App
+            function onStorageLoaded(cid, pools) {
+                if (!root.vm || cid !== root.vm.connectionId || !attachDialog.visible) return;
+                apPools.clear();
+                for (let i = 0; i < pools.length; ++i) apPools.append({ text: pools[i].name });
+                if (pools.length > 0) App.loadVolumes(root.vm.connectionId, pools[0].name);
+            }
+            function onVolumesLoaded(cid, poolName, vols) {
+                if (!root.vm || cid !== root.vm.connectionId || !attachDialog.visible) return;
+                apVols.clear();
+                for (let i = 0; i < vols.length; ++i)
+                    apVols.append({ text: vols[i].name, path: vols[i].path, format: vols[i].format || "qcow2" });
+            }
+        }
+        onOpened: { apVols.clear(); App.loadStorage(root.vm.connectionId); }
+        contentItem: ColumnLayout {
+            spacing: Theme.space4
+            Text { text: qsTr("Attach a disk"); color: Theme.text; font.pixelSize: Theme.fontLg; font.weight: Font.DemiBold }
+            RowLayout { Layout.fillWidth: true; spacing: Theme.space3
+                Text { text: qsTr("Pool"); color: Theme.textDim; font.pixelSize: Theme.fontMd; Layout.preferredWidth: 64 }
+                AppComboBox { id: apPool; Layout.fillWidth: true; textRole: "text"; model: apPools
+                    onActivated: App.loadVolumes(root.vm.connectionId, currentText) } }
+            RowLayout { Layout.fillWidth: true; spacing: Theme.space3
+                Text { text: qsTr("Volume"); color: Theme.textDim; font.pixelSize: Theme.fontMd; Layout.preferredWidth: 64 }
+                AppComboBox { id: apVol; Layout.fillWidth: true; textRole: "text"; model: apVols } }
+            RowLayout { Layout.fillWidth: true; spacing: Theme.space3
+                Text { text: qsTr("Bus"); color: Theme.textDim; font.pixelSize: Theme.fontMd; Layout.preferredWidth: 64 }
+                AppComboBox { id: apBus; Layout.fillWidth: true; model: ["virtio", "sata", "scsi"] } }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                AppButton { text: qsTr("Cancel"); variant: "ghost"; onClicked: attachDialog.close() }
+                AppButton { text: qsTr("Attach"); variant: "primary"
+                    enabled: apVol.currentIndex >= 0 && apVols.count > 0
+                    onClicked: {
+                        var v = apVols.get(apVol.currentIndex);
+                        App.attachDisk(root.vm.connectionId, root.vm.uuid, v.path, apBus.currentText, v.format);
+                        attachDialog.close();
+                    }
+                }
             }
         }
     }
